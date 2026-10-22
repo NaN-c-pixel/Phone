@@ -26,14 +26,15 @@ The clock is set from the internet (NTP); change `TZ_HOURS` at the top of `main.
    esptool.py --chip esp32s3 write_flash 0 firmware.bin
    ```
 2. **Open Thonny** → Interpreter: *MicroPython (ESP32)* → pick the COM port.
-3. **Wi-Fi login:** copy `wifi_config_example.py` to `wifi_config.py`, fill in your 2.4 GHz
-   network name and password, and save **both** it and `main.py` to the board
-   (File → Save as → *MicroPython device*).
+3. **Save the files to the board** (File → Save as → *MicroPython device*): `main.py` (tiny launcher),
+   `app.py` (the real program) and `wifi_config.py`. For the last one, copy
+   `wifi_config_example.py`, fill in your 2.4 GHz network name and password.
 4. Press RESET. The shell prints `Open http://192.168.x.x` — visit that address.
 
 ## Troubleshooting
 | Problem | Fix |
 |---|---|
+| Can't save: `backend isn't ready` | Press Stop/Ctrl+C during the 5-second countdown after RST, or hold **BOOT** while pressing **RST** for edit mode |
 | `Device is busy` / `backend isn't ready` | Press Stop (Ctrl+C), then RESET; or replug USB |
 | `Access is denied` on COM port | Close other apps using it, replug, restart Thonny |
 | `Wifi Internal State Error` | Handled automatically (driver reset + retries) |
