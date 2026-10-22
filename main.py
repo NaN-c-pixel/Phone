@@ -487,7 +487,6 @@ def respond(client, body, status="200 OK",
     try:
         if isinstance(body, str):
             body = body.encode("utf-8")
-
         header = (
             "HTTP/1.1 " + status + "\r\n"
             "Content-Type: " + content_type + "\r\n"
@@ -495,19 +494,15 @@ def respond(client, body, status="200 OK",
             "Cache-Control: no-store\r\n"
             "Content-Length: " + str(len(body)) + "\r\n\r\n"
         )
-
-        client.send(header.encode("ascii"))
-
-        pos = 0
-        while pos < len(body):
-            sent = client.send(body[pos:pos + 512])
-            if not sent:
-                break
-            pos += sent
-
+        client.settimeout(10)
+        client.sendall(header.encode("ascii"))
+        mv = memoryview(body)
+        for pos in range(0, len(body), 1024):
+            client.sendall(mv[pos:pos + 1024])
+            time.sleep_ms(5)   # let the Wi-Fi stack drain its buffers
+        print("Sent", len(body), "bytes")
     except Exception as e:
         print("Response error:", repr(e))
-
 
 
 def handle(client):
