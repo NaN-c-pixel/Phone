@@ -913,18 +913,26 @@ def serve():
 
     while True:
         try:
-            client, address = server.accept()
-        except OSError:
-            continue
-
-        try:
-            handle(client)
-        finally:
+            try:
+                client, address = server.accept()
+            except OSError:
+                continue
+            try:
+                handle(client)
+            except Exception as e:
+                print("handler error:", repr(e))
             try:
                 client.close()
             except Exception:
                 pass
-            gc.collect()
+            try:
+                gc.collect()
+            except Exception:
+                pass
+        except Exception as e:
+            # never let one bad request stop the server
+            print("server loop error:", repr(e))
+            time.sleep_ms(100)
 
 # -------------------- START HUNGSOS -------------------------
 
