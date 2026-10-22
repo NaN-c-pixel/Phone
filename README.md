@@ -31,6 +31,23 @@ The clock is set from the internet (NTP); change `TZ_HOURS` at the top of `main.
    `wifi_config_example.py`, fill in your 2.4 GHz network name and password.
 4. Press RESET. The shell prints `Open http://192.168.x.x` — visit that address.
 
+## Test your board's flash (if saving files fails)
+If saving files fails with `OSError: 28`, `OSError: 36` or "No space left on device" even though
+the storage looks empty, the board's flash may be unreliable (common on cheap or relabeled chips).
+`tools/flashtest.py` writes and re-reads random data at every 1 MB of the flash and reports which
+areas are good.
+
+```
+python -m pip install esptool
+python tools/flashtest.py COM6      # use your board's COM port
+```
+
+- Put the board in download mode if it can't connect (hold **BOOT**, tap **RST**, release **BOOT**).
+- The test overwrites the filesystem area, so afterwards run `python -m esptool --port COM6 erase_flash`
+  and flash MicroPython again.
+- Run `python -m esptool --port COM6 flash_id` first to see the flash maker and size.
+- Post the output in an issue so others can compare their boards.
+
 ## Troubleshooting
 | Problem | Fix |
 |---|---|
