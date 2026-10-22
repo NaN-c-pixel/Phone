@@ -26,6 +26,9 @@ except ImportError:
     SSID = "YOUR_WIFI_NAME"
     PASSWORD = "YOUR_WIFI_PASSWORD"
 
+TZ_HOURS = 7          # Vietnam (UTC+7); change for other time zones
+SYNCED = False        # becomes True once the clock is set from the internet
+
 # -------------------- HTML / CSS -----------------------------
 
 CSS = r"""
@@ -142,20 +145,28 @@ def esc(value):
                  .replace("'", "&#x27;"))
 
 def decode(value):
+    # URL-decode as UTF-8 bytes so Vietnamese letters etc. survive
     value = value.replace("+", " ")
-    out = ""
+    if "%" not in value:
+        return value
+    out = bytearray()
     i = 0
-    while i < len(value):
-        if value[i] == "%" and i + 2 < len(value):
+    n = len(value)
+    while i < n:
+        c = value[i]
+        if c == "%" and i + 2 < n:
             try:
-                out += chr(int(value[i+1:i+3], 16))
+                out.append(int(value[i+1:i+3], 16))
                 i += 3
                 continue
             except Exception:
                 pass
-        out += value[i]
+        out.extend(c.encode())
         i += 1
-    return out
+    try:
+        return out.decode()
+    except Exception:
+        return value
 
 def form_value(body, name):
     try:
@@ -266,21 +277,25 @@ def connect():
 # -------------------- PAGES ----------------------------------
 
 def page_home():
-    try:
-        now = time.localtime()
+    if SYNCED:
+        now = time.localtime(time.time() + TZ_HOURS * 3600)
         clock = "%02d:%02d" % (now[3], now[4])
         date = "%04d-%02d-%02d" % (now[0], now[1], now[2])
-    except Exception:
+    else:
         clock = "--:--"
-        date = "Welcome to HungsOS"
+        date = "Time not synced (no internet?)"
 
     apps = (
         app("📝", "Notes", "/notes", "yellow") +
+        app("✅", "Tasks", "/todo", "orange") +
         app("📁", "Files", "/files", "blue") +
-        app("⚙️", "Settings", "/system", "dark") +
+        app("⏱", "Timer", "/timer", "teal") +
+        app("📈", "Monitor", "/monitor", "green") +
+        app("🔌", "GPIO", "/gpio", "purple") +
         app("📶", "Wi-Fi", "/wifi", "green") +
         app("ᛒ", "Bluetooth", "/bluetooth", "purple") +
         app("🧮", "Calculator", "/calc", "orange") +
+        app("⚙️", "Settings", "/system", "dark") +
         app("🔄", "Reboot", "/reboot", "pink")
     )
 
@@ -328,12 +343,13 @@ def page_files():
                 continue
             safe = esc(name)
             items += '<div class="row"><span>📄 ' + safe + '</span>'
-            items += '<a href="/view?name=' + name + '">Open</a></div>'
+            items += '<span><a href="/view?name=' + name + '">Open</a> &nbsp; <a href="/edit?name=' + name + '">Edit</a></span></div>'
     except Exception as e:
         items = "<p>Could not list files: " + esc(e) + "</p>"
 
     content = "<h1>Files</h1><div class='sub'>Files stored on the device.</div>"
     content += card("Device storage", items or "No files found.")
+    content += card("New file", '<form method="GET" action="/edit"><input name="name" placeholder="example.txt" maxlength="32"><button class="full" type="submit">Create / open</button></form>')
     return page("Files", content, "files")
 
 def page_view(name):
@@ -479,6 +495,267 @@ function calc(){
 """
     return page("Calculator", content)
 
+
+# -------------------- EXTRA APPS ------------------------------
+
+TODO_FILE = "todo.txt"
+PROTECTED = ("main.py", "boot.py")
+GPIO_OK = (1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,21,38,39,40,41,42,47)
+gpio_state = {}
+
+def valid_name(name):
+    return (0 < len(name) <= 32 and "/" not in name and "\\" not in name
+            and not name.startswith("."))
+
+def todo_load():
+    items = []
+    try:
+        with open(TODO_FILE) as f:
+            for line in f:
+                line = line.strip()
+                if len(line) > 2 and line[1] == "|":
+                    items.append([line[0] == "1", line[2:]])
+    except OSError:
+        pass
+    return items[:50]
+
+def todo_save(items):
+    with open(TODO_FILE, "w") as f:
+        for done, text in items:
+            f.write(("1|" if done else "0|") + text + "\n")
+
+def page_todo():
+    items = todo_load()
+    rows = ""
+    for i, (done, text) in enumerate(items):
+        label = ("<s class=muted>" + esc(text) + "</s>") if done else esc(text)
+        rows += ('<form method="POST" action="/todo" class="row">'
+                 '<span>' + label + '</span><span>'
+                 '<button name="act" value="t%d" class="secondary">%s</button> '
+                 '<button name="act" value="d%d" class="danger">&times;</button>'
+                 '</span></form>') % (i, "Undo" if done else "Done", i)
+    left = len([1 for d, t in items if not d])
+    content = "<h1>Tasks</h1><div class='sub'>%d to do, %d total.</div>" % (left, len(items))
+    content += card("Add a task", '<form method="POST" action="/todo">'
+                    '<input name="text" maxlength="100" placeholder="What needs doing?">'
+                    '<button class="full" name="act" value="add">Add</button></form>')
+    content += card("Your list", rows or "<span class=muted>Nothing yet.</span>")
+    return page("Tasks", content)
+
+def page_timer():
+    content = """
+<h1>Timer</h1><div class="sub">Stopwatch and countdown (runs in your browser).</div>
+<div class="card"><div class="card-title">Stopwatch</div>
+<div class="calc-display" id="sw">00:00.0</div><br>
+<button onclick="swGo()" id="swb">Start</button>
+<button class="secondary" onclick="swLap()">Lap</button>
+<button class="danger" onclick="swReset()">Reset</button>
+<pre id="laps"></pre></div>
+<div class="card"><div class="card-title">Countdown</div>
+<input id="mins" type="number" min="0" max="600" value="5">
+<div class="calc-display" id="cd">05:00</div><br>
+<button onclick="cdGo()" id="cdb">Start</button>
+<button class="danger" onclick="cdReset()">Reset</button></div>
+<script>
+var st=0,el=0,run=false,ti=null,laps=[];
+function f(ms){var t=Math.floor(ms/100),d=t%10,s=Math.floor(t/10)%60,m=Math.floor(t/600);
+ return (m<10?'0':'')+m+':'+(s<10?'0':'')+s+'.'+d;}
+function swGo(){if(!run){st=Date.now()-el;ti=setInterval(function(){el=Date.now()-st;
+ document.getElementById('sw').textContent=f(el);},100);run=true;swb.textContent='Pause';}
+ else{clearInterval(ti);run=false;swb.textContent='Start';}}
+function swLap(){if(el){laps.push(f(el));document.getElementById('laps').textContent=
+ laps.map(function(x,i){return (i+1)+'. '+x;}).join('\\n');}}
+function swReset(){clearInterval(ti);run=false;el=0;laps=[];swb.textContent='Start';
+ document.getElementById('sw').textContent='00:00.0';document.getElementById('laps').textContent='';}
+var cdt=null,left=0;
+function cf(s){var m=Math.floor(s/60),x=s%60;return (m<10?'0':'')+m+':'+(x<10?'0':'')+x;}
+function cdGo(){if(cdt){clearInterval(cdt);cdt=null;cdb.textContent='Start';return;}
+ if(!left)left=Math.round(parseFloat(document.getElementById('mins').value||0)*60);
+ if(!left)return;cdb.textContent='Pause';
+ cdt=setInterval(function(){left--;document.getElementById('cd').textContent=cf(left);
+ if(left<=0){clearInterval(cdt);cdt=null;left=0;cdb.textContent='Start';
+ try{navigator.vibrate(500)}catch(e){}alert("Time's up!");}},1000);}
+function cdReset(){clearInterval(cdt);cdt=null;left=0;cdb.textContent='Start';
+ document.getElementById('cd').textContent=cf(Math.round(parseFloat(document.getElementById('mins').value||0)*60));}
+</script>
+"""
+    return page("Timer", content)
+
+def temp_c():
+    try:
+        import esp32
+        return round(esp32.mcu_temperature(), 1)
+    except Exception:
+        return None
+
+def api_stats():
+    gc.collect()
+    try:
+        rssi = wlan.status("rssi")
+    except Exception:
+        rssi = 0
+    t = temp_c()
+    return ('{"free":%d,"used":%d,"rssi":%d,"temp":%s,"up":%d}' %
+            (gc.mem_free(), gc.mem_alloc(), rssi,
+             "null" if t is None else str(t), time.ticks_ms() // 1000))
+
+def page_monitor():
+    content = """
+<h1>Monitor</h1><div class="sub">Live readings, updated every 2 seconds.</div>
+<div class="card"><div class="card-title">RAM used</div>
+<div style="background:#e4e4eb;border-radius:9px;height:16px"><div id="rb" style="background:#087fff;height:16px;border-radius:9px;width:0"></div></div>
+<div class="muted" id="rt"></div></div>
+<div class="card"><div class="card-title">Wi-Fi signal</div><div class="clock" style="font-size:38px;letter-spacing:-1px" id="wi">--</div></div>
+<div class="card"><div class="card-title">Chip temperature</div><div class="clock" style="font-size:38px;letter-spacing:-1px" id="tp">--</div></div>
+<div class="card"><div class="card-title">Uptime</div><div id="up" class="value" style="text-align:left"></div></div>
+<canvas id="ch" width="500" height="120" style="width:100%;background:#fff;border-radius:20px"></canvas>
+<script>
+var hist=[];
+function tick(){fetch('/api/stats').then(function(r){return r.json()}).then(function(d){
+ var tot=d.free+d.used,p=Math.round(d.used*100/tot);
+ document.getElementById('rb').style.width=p+'%';
+ document.getElementById('rt').textContent=Math.round(d.used/1024)+' KB of '+Math.round(tot/1024)+' KB ('+p+'%)';
+ document.getElementById('wi').textContent=d.rssi+' dBm';
+ document.getElementById('tp').textContent=d.temp===null?'n/a':d.temp+' °C';
+ var s=d.up;document.getElementById('up').textContent=Math.floor(s/3600)+'h '+Math.floor(s%3600/60)+'m '+(s%60)+'s';
+ hist.push(d.rssi);if(hist.length>40)hist.shift();
+ var c=document.getElementById('ch').getContext('2d');c.clearRect(0,0,500,120);
+ c.strokeStyle='#087fff';c.lineWidth=2;c.beginPath();
+ hist.forEach(function(v,i){var x=i*500/39,y=120-((v+100)/70)*110-5;if(i)c.lineTo(x,y);else c.moveTo(x,y);});c.stroke();
+ }).catch(function(){});}
+tick();setInterval(tick,2000);
+</script>
+"""
+    return page("Monitor", content)
+
+def page_gpio(msg=""):
+    rows = ""
+    for p in sorted(gpio_state):
+        rows += row("GPIO %d" % p, "HIGH" if gpio_state[p] else "LOW")
+    content = "<h1>GPIO</h1><div class='sub'>Control pins on the board. Safe pins only.</div>"
+    content += card("Set a pin", '<form method="POST" action="/gpio">'
+        '<input name="pin" type="number" placeholder="Pin number (e.g. 4)">'
+        '<button name="act" value="1">HIGH</button> '
+        '<button name="act" value="0" class="secondary">LOW</button> '
+        '<button name="act" value="r" class="secondary">Read</button></form>'
+        + ('<p class="muted">' + esc(msg) + '</p>' if msg else ''))
+    content += card("Pins you've set", rows or "<span class=muted>None yet.</span>")
+    content += card("Allowed pins", "<span class=muted>" +
+                    ", ".join(str(x) for x in GPIO_OK) + "<br>Other pins are used by flash, PSRAM or USB.</span>")
+    return page("GPIO", content)
+
+def gpio_act(body):
+    try:
+        pin = int(form_value(body, "pin"))
+    except Exception:
+        return "Enter a pin number."
+    if pin not in GPIO_OK:
+        return "GPIO %d is not allowed." % pin
+    act = form_value(body, "act")
+    try:
+        if act == "r":
+            return "GPIO %d reads %d" % (pin, machine.Pin(pin, machine.Pin.IN).value())
+        p = machine.Pin(pin, machine.Pin.OUT)
+        p.value(1 if act == "1" else 0)
+        gpio_state[pin] = 1 if act == "1" else 0
+        return "GPIO %d set %s" % (pin, "HIGH" if act == "1" else "LOW")
+    except Exception as e:
+        return "Error: " + str(e)
+
+def page_edit(name, msg=""):
+    if not valid_name(name):
+        return page("Edit", "<h1>Invalid file name</h1>", "files")
+    try:
+        with open(name) as f:
+            text = f.read(8000)
+    except Exception:
+        text = ""
+    content = "<h1>" + esc(name) + "</h1>"
+    content += card("Editor", '<form method="POST" action="/edit">'
+        '<input type="hidden" name="name" value="' + esc(name) + '">'
+        '<textarea name="content" style="height:300px;font-family:monospace;font-size:13px">' +
+        esc(text) + '</textarea>'
+        '<button class="full" name="act" value="save">Save</button><br><br>'
+        + ('' if name in PROTECTED else
+           '<button class="danger full" name="act" value="delete">Delete file</button>')
+        + '</form>' + ('<p class="muted">' + esc(msg) + '</p>' if msg else ''))
+    return page("Edit", content, "files")
+
+def route_extra(client, method, path, query, body):
+    """Returns True if the request was handled here."""
+    if path == "/api/stats":
+        respond(client, api_stats(), content_type="application/json")
+        return True
+    if path == "/todo":
+        if method == "POST":
+            items = todo_load()
+            act = form_value(body, "act")
+            try:
+                if act == "add":
+                    t = form_value(body, "text").strip()[:100].replace("\n", " ")
+                    if t and len(items) < 50:
+                        items.append([False, t])
+                elif act[:1] == "t":
+                    items[int(act[1:])][0] = not items[int(act[1:])][0]
+                elif act[:1] == "d":
+                    items.pop(int(act[1:]))
+                todo_save(items)
+            except Exception as e:
+                print("todo error:", e)
+        respond(client, page_todo())
+        return True
+    if path == "/timer":
+        respond(client, page_timer())
+        return True
+    if path == "/monitor":
+        respond(client, page_monitor())
+        return True
+    if path == "/gpio":
+        msg = gpio_act(body) if method == "POST" else ""
+        respond(client, page_gpio(msg))
+        return True
+    if path == "/edit":
+        if method == "POST":
+            name = form_value(body, "name")
+            act = form_value(body, "act")
+            if not valid_name(name):
+                respond(client, page_edit(name))
+            elif act == "delete":
+                if name in PROTECTED:
+                    respond(client, page_edit(name, "That file is protected."))
+                else:
+                    try:
+                        os.remove(name)
+                    except Exception:
+                        pass
+                    respond(client, page_files())
+            else:
+                try:
+                    with open(name, "w") as f:
+                        f.write(form_value(body, "content").replace("\r\n", "\n")[:8000])
+                    respond(client, page_edit(name, "Saved ✓"))
+                except Exception as e:
+                    respond(client, page_edit(name, "Save error: " + str(e)))
+        else:
+            name = ""
+            for item in query.split("&"):
+                p = item.split("=", 1)
+                if len(p) == 2 and p[0] == "name":
+                    name = decode(p[1])
+            respond(client, page_edit(name))
+        return True
+    return False
+
+def sync_time():
+    global SYNCED
+    try:
+        import ntptime
+        ntptime.settime()
+        SYNCED = True
+        print("Time synced from the internet.")
+    except Exception as e:
+        print("Time sync failed (clock stays blank):", e)
+
 # -------------------- HTTP SERVER ----------------------------
 
 
@@ -534,11 +811,17 @@ def handle(client):
                 except Exception:
                     length = 0
 
+        if length > 30000:
+            respond(client, "Too large", "413 Payload Too Large", "text/plain")
+            return
         while len(body) < length:
             chunk = client.recv(min(1024, length - len(body)))
             if not chunk:
                 break
             body += chunk
+
+        if route_extra(client, method, path, query, body):
+            return
 
         if method == "POST" and path == "/notes":
             note = form_value(body, "note")[:4000]
@@ -649,6 +932,8 @@ if SSID == "YOUR_WIFI_NAME":
     print("WARNING: copy wifi_config_example.py to wifi_config.py and fill it in.")
 
 IP = connect()
+if IP != "0.0.0.0":
+    sync_time()
 
 if IP != "0.0.0.0":
     serve()

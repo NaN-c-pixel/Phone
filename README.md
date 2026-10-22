@@ -3,7 +3,15 @@
 A pocket computer on an **ESP32-S3 (N16R8)** running MicroPython. It serves an iPhone-style
 home screen over Wi-Fi; open it from any phone or PC browser on the same network.
 
-**Apps:** Notes, Files, Settings, Wi-Fi, Bluetooth scanner, Calculator, Reboot.
+**Apps:**
+- **Notes**, **Tasks** (to-do list with done/delete)
+- **Files** (view, create, edit, delete files on the board)
+- **Timer** (stopwatch with laps + countdown)
+- **Monitor** (live RAM, Wi-Fi signal graph, chip temperature)
+- **GPIO** (set/read safe pins, e.g. to drive an LED)
+- **Wi-Fi**, **Bluetooth** scanner, **Calculator**, **Settings**, **Reboot**
+
+The clock is set from the internet (NTP); change `TZ_HOURS` at the top of `main.py` for your time zone.
 
 ## Roadmap
 - [x] Wi-Fi web UI (HungsOS Pocket Edition)
