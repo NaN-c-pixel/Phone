@@ -29,3 +29,24 @@ Use this list to test the current GitHub `main` build on the ESP32-S3 N16R8. Che
 - **Tested on hardware:** Not yet confirmed
 - **GitHub source of truth:** `main` branch
 - **Latest DOPE AI commit:** `062d6ecb0bcf9cb22eb07e31a9b4472a1e3a09b3`
+
+
+## HungsOS Arcade
+
+- [ ] Home screen shows the **Games** icon and `/games` opens HungsOS Arcade.
+- [ ] **AI Snake** starts, moves automatically, eats food, and stops on collision.
+- [ ] AI Snake's score, best score, and run count update correctly.
+- [ ] Starting a second AI run works without overlapping timers.
+- [ ] Manual Snake controls work with the arrow buttons or keyboard.
+- [ ] AI Snake's saved best/run/caution stats survive a browser refresh.
+- [ ] **2048** starts with two tiles and arrow/button moves merge equal tiles correctly.
+- [ ] 2048 score updates on merges and a new game resets the board.
+- [ ] **Memory Match** reveals cards, counts moves/pairs, and detects completion.
+- [ ] The game buttons and boards fit on a narrow phone screen.
+- [ ] Existing DOPE AI and the original Snake app still open.
+
+## Arcade notes
+
+- AI Snake uses a lightweight safety/food-seeking heuristic with a small caution adjustment between runs; it is not a neural network.
+- 2048 and Memory Match run in the browser and do not need extra MicroPython packages.
+- **Tested on physical ESP32:** not yet confirmed.
