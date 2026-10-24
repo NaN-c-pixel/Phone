@@ -668,25 +668,75 @@ def temp_c():
         return None
 
 def api_stats():
+    # Keep this endpoint lightweight: the ESP32 serves one JSON snapshot.
     gc.collect()
+    free = gc.mem_free()
+    used = gc.mem_alloc()
     try:
-        rssi = wlan.status("rssi")
+        rssi = wlan.status("rssi") if wlan.isconnected() else -100
     except Exception:
-        rssi = 0
-    t = temp_c()
-    return ('{"free":%d,"used":%d,"rssi":%d,"temp":%s,"up":%d}' %
-            (gc.mem_free(), gc.mem_alloc(), rssi,
-             "null" if t is None else str(t), time.ticks_ms() // 1000))
-
-def page_monitor():
+        rssi = -100
+    try:
+        ip = wlan.ifconfig()[0] if wldef page_monitor():
     content = """
-<h1>Monitor</h1><div class="sub">Live readings, updated every 2 seconds.</div>
-<div class="card"><div class="card-title">RAM used</div>
-<div style="background:#e4e4eb;border-radius:9px;height:16px"><div id="rb" style="background:#087fff;height:16px;border-radius:9px;width:0"></div></div>
-<div class="muted" id="rt"></div></div>
-<div class="card"><div class="card-title">Wi-Fi signal</div><div class="clock" style="font-size:38px;letter-spacing:-1px" id="wi">--</div></div>
-<div class="card"><div class="card-title">Chip temperature</div><div class="clock" style="font-size:38px;letter-spacing:-1px" id="tp">--</div></div>
-<div class="card"><div class="card-title">Uptime</div><div id="up" class="value" style="text-align:left"></div></div>
+<h1>Task Manager</h1><div class="sub">HungsOS System Monitor · live device telemetry</div>
+<div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+ <div class="card"><div class="card-title">Heap memory</div><div class="clock" id="memnow" style="font-size:26px">--</div><div class="muted" id="memplus">Waiting for data…</div><div class="meter"><div id="membar"></div></div></div>
+ <div class="card"><div class="card-title">Wi-Fi signal</div><div class="clock" id="wifinow" style="font-size:26px">--</div><div class="muted" id="wifitxt">Signal strength</div><div class="meter"><div id="wifibar"></div></div></div>
+ <div class="card"><div class="card-title">Chip temperature</div><div class="clock" id="tempnow" style="font-size:26px">--</div><div class="muted">Internal estimate, if supported</div></div>
+ <div class="card"><div class="card-title">CPU frequency</div><div class="clock" id="cpunow" style="font-size:26px">--</div><div class="muted">Clock speed, not CPU utilization</div></div>
+</div>
+<div class="card"><div class="card-title">Memory history</div><div class="muted">Last 60 samples · every 3 seconds</div><canvas id="memchart" width="500" height="130" style="width:100%;height:130px"></canvas><div class="muted" id="memlegend"></div></div>
+<div class="card"><div class="card-title">Wi-Fi signal history</div><canvas id="wifichart" width="500" height="110" style="width:100%;height:110px"></canvas></div>
+<div class="card"><div class="card-title">Temperature history</div><canvas id="tempchart" width="500" height="110" style="width:100%;height:110px"></canvas></div>
+<div class="card"><div class="card-title">Storage</div><div class="row"><span class="muted">Filesystem used</span><span class="value" id="fsused">--</span></div><div class="meter"><div id="fsbar"></div></div><div class="muted" id="fsdetail">Flash filesystem stats, when available</div></div>
+<div class="card"><div class="card-title">Network</div><div class="row"><span class="muted">Connection</span><span class="value" id="netstate">--</span></div><div class="row"><span class="muted">IP address</span><span class="value" id="ipaddr">--</span></div><div class="row"><span class="muted">Wi-Fi MAC</span><span class="value" id="macaddr">--</span></div><div class="row"><span class="muted">Signal quality</span><span class="value" id="quality">--</span></div></div>
+<div class="card"><div class="card-title">System details</div><div class="row"><span class="muted">Uptime</span><span class="value" id="uptime">--</span></div><div class="row"><span class="muted">Firmware</span><span class="value" id="firmware">--</span></div><div class="row"><span class="muted">Platform</span><span class="value" id="platform">--</span></div><div class="row"><span class="muted">Reset cause code</span><span class="value" id="resetcause">--</span></div><div class="row"><span class="muted">Last successful update</span><span class="value" id="lastupdate">--</span></div><div class="row"><span class="muted">Monitor status</span><span class="value" id="monstatus">Starting…</span></div></div>
+<div class="muted" style="padding:8px 2px">Note: this reports the ESP32-S3 itself, not Windows Task Manager. MicroPython does not expose a reliable per-process CPU usage percentage here.</div>
+<script>
+var series={mem:[],wifi:[],temp:[]},samples=60,lastGood=0;
+function byid(id){return document.getElementById(id);}
+function fmtBytes(n){if(!n)return 'Unavailable';if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(1)+' KB';return (n/1048576).toFixed(2)+' MB';}
+function fmtTime(s){s=Math.max(0,Math.floor(s||0));return Math.floor(s/86400)+'d '+Math.floor(s%86400/3600)+'h '+Math.floor(s%3600/60)+'m '+s%60+'s';}
+function draw(id,values,color,min,max){
+ var cv=byid(id),ctx=cv.getContext('2d'),w=500,h=cv.height;
+ ctx.clearRect(0,0,w,h);ctx.fillStyle='#f7f8fc';ctx.fillRect(0,0,w,h);
+ ctx.strokeStyle='#e2e5ed';ctx.lineWidth=1;
+ for(var g=1;g<4;g++){ctx.beginPath();ctx.moveTo(0,g*h/4);ctx.lineTo(w,g*h/4);ctx.stroke();}
+ if(values.length<2)return;
+ var vals=values.slice(),lo=min,hi=max;
+ if(lo===null||lo===undefined){lo=Math.min.apply(null,vals);hi=Math.max.apply(null,vals);if(hi===lo){hi+=1;lo-=1;}var pad=(hi-lo)*0.12;lo-=pad;hi+=pad;}
+ ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();
+ vals.forEach(function(v,i){var x=i*(w-8)/(samples-1)+4,y=h-5-((v-lo)/(hi-lo))*(h-10);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});ctx.stroke();
+}
+function tick(){
+ fetch('/api/stats',{cache:'no-store'}).then(function(r){if(!r.ok)throw Error('HTTP '+r.status);return r.json();}).then(function(d){
+  lastGood=Date.now();byid('monstatus').textContent='Live';byid('lastupdate').textContent=new Date().toLocaleTimeString();
+  var total=d.heap_total||((d.free||0)+(d.used||0)),pct=total?Math.round(d.used*100/total):0;
+  byid('memnow').textContent=pct+'%';byid('memplus').textContent=fmtBytes(d.used)+' used · '+fmtBytes(d.free)+' free';
+  byid('membar').style.width=Math.min(100,pct)+'%';
+  byid('wifinow').textContent=d.wifi?d.rssi+' dBm':'Offline';
+  var q=d.rssi<=-90?0:d.rssi>=-50?100:Math.round((d.rssi+90)/40*100);
+  byid('wifitxt').textContent=d.wifi?'Signal estimate':'Not connected';byid('wifibar').style.width=q+'%';byid('quality').textContent=d.wifi?(q>=70?'Strong':q>=40?'Fair':'Weak'):'Offline';
+  byid('tempnow').textContent=d.temp===null?'N/A':d.temp+' °C';
+  byid('cpunow').textContent=d.freq?Math.round(d.freq/1000000)+' MHz':'N/A';
+  byid('fsused').textContent=d.flash_total?Math.round((d.flash_total-d.flash_free)*100/d.flash_total)+'% used':'N/A';
+  var fp=d.flash_total?Math.round((d.flash_total-d.flash_free)*100/d.flash_total):0;byid('fsbar').style.width=Math.min(100,fp)+'%';
+  byid('fsdetail').textContent=d.flash_total?fmtBytes(d.flash_total-d.flash_free)+' used of '+fmtBytes(d.flash_total)+' total · '+fmtBytes(d.flash_free)+' free':'Filesystem usage unavailable';
+  byid('netstate').textContent=d.wifi?'Connected':'Disconnected';byid('ipaddr').textContent=d.ip||'--';byid('macaddr').textContent=d.mac||'--';
+  byid('uptime').textContent=fmtTime(d.up);byid('firmware').textContent=d.version||'Unknown';byid('platform').textContent=d.platform||'MicroPython';byid('resetcause').textContent=d.reset;
+  series.mem.push(total?Math.round(d.used*100/total):0);series.wifi.push(typeof d.rssi==='number'?d.rssi:-100);
+  if(d.temp!==null&&typeof d.temp==='number')series.temp.push(d.temp);
+  ['mem','wifi','temp'].forEach(function(k){if(series[k].length>samples)series[k].shift();});
+  draw('memchart',series.mem,'#087fff',0,100);draw('wifichart',series.wifi,'#30a46c',-100,-30);draw('tempchart',series.temp,'#a05af5',null,null);
+  byid('memlegend').textContent='Heap allocation percentage · '+series.mem.length+' samples';
+ }).catch(function(){byid('monstatus').textContent='Waiting for device…';});
+}
+tick();setInterval(tick,3000);
+</script>
+"""
+    return page("Task Manager", content)
+text-align:left"></div></div>
 <canvas id="ch" width="500" height="120" style="width:100%;background:#fff;border-radius:20px"></canvas>
 <script>
 var hist=[];
