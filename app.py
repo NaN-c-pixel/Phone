@@ -27,6 +27,11 @@ except ImportError:
     PASSWORD = "YOUR_WIFI_PASSWORD"
 
 try:
+    from wifi_config import WEATHER_LAT, WEATHER_LON, WEATHER_NAME
+except ImportError:
+    WEATHER_LAT, WEATHER_LON, WEATHER_NAME = 10.82, 106.63, "Ho Chi Minh City"
+
+try:
     from wifi_config import KALI_URL      # optional: address of a real Kali web terminal
 except ImportError:
     KALI_URL = ""
@@ -297,6 +302,14 @@ def page_home():
 
     apps = (
         app("📝", "Notes", "/notes", "yellow") +
+        app("☀️", "Weather", "/weather", "teal") +
+        app("👤", "Contacts", "/contacts", "green") +
+        app("📅", "Calendar", "/calendar", "pink") +
+        app("⚖️", "Convert", "/convert", "orange") +
+        app("🐍", "Snake", "/snake", "green") +
+        app("🔑", "Passwords", "/passgen", "purple") +
+        app("🌍", "World", "/world", "blue") +
+        app("🛜", "Net Tools", "/nettools", "dark") +
         app("✅", "Tasks", "/todo", "orange") +
         app("📁", "Files", "/files", "blue") +
         app("⏱", "Timer", "/timer", "teal") +
@@ -695,6 +708,8 @@ def page_edit(name, msg=""):
 
 def route_extra(client, method, path, query, body):
     """Returns True if the request was handled here."""
+    if route_more(client, method, path, body):
+        return True
     if path == "/api/stats":
         respond(client, api_stats(), content_type="application/json")
         return True
@@ -1056,6 +1071,279 @@ i.focus();
 </script>
 """
     return page("Terminal", content)
+
+
+# -------------------- MORE APPS -------------------------------
+
+CONTACTS_FILE = "contacts.txt"
+
+def contacts_load():
+    items = []
+    try:
+        with open(CONTACTS_FILE) as f:
+            for line in f:
+                line = line.strip()
+                if "|" in line:
+                    n, _, ph = line.partition("|")
+                    items.append((n, ph))
+    except OSError:
+        pass
+    return items[:100]
+
+def contacts_save(items):
+    with open(CONTACTS_FILE, "w") as f:
+        for n, ph in items:
+            f.write(n + "|" + ph + "\n")
+
+def clean(t, n):
+    return t.replace("|", " ").replace("\n", " ").replace("\r", " ").strip()[:n]
+
+def page_contacts():
+    items = contacts_load()
+    items.sort(key=lambda x: x[0].lower())
+    rows = ""
+    for i, (n, ph) in enumerate(items):
+        rows += ('<form method="POST" action="/contacts" class="row"><span><b>' + esc(n) +
+                 '</b><br><a href="tel:' + esc(ph) + '">' + esc(ph) + '</a></span>'
+                 '<button name="act" value="d' + esc(n) + '|' + esc(ph) + '" class="danger">&times;</button></form>')
+    content = "<h1>Contacts</h1><div class='sub'>%d saved.</div>" % len(items)
+    content += card("Add contact", '<form method="POST" action="/contacts">'
+                    '<input name="name" maxlength="40" placeholder="Name">'
+                    '<input name="phone" maxlength="25" placeholder="Phone number" inputmode="tel">'
+                    '<button class="full" name="act" value="add">Save</button></form>')
+    content += card("Your contacts", rows or "<span class=muted>Nothing yet.</span>")
+    return page("Contacts", content)
+
+WX = {0: "Clear sky", 1: "Mostly clear", 2: "Partly cloudy", 3: "Overcast", 45: "Fog",
+      48: "Fog", 51: "Light drizzle", 53: "Drizzle", 55: "Heavy drizzle", 61: "Light rain",
+      63: "Rain", 65: "Heavy rain", 80: "Showers", 81: "Showers", 82: "Heavy showers",
+      95: "Thunderstorm", 96: "Thunderstorm", 99: "Thunderstorm"}
+
+def http_get(url, timeout=8):
+    try:
+        import requests
+    except ImportError:
+        import urequests as requests
+    gc.collect()
+    r = requests.get(url, timeout=timeout)
+    try:
+        return r.status_code, r.text
+    finally:
+        r.close()
+
+def page_weather():
+    content = "<h1>Weather</h1><div class='sub'>" + esc(WEATHER_NAME) + "</div>"
+    try:
+        url = ("https://api.open-meteo.com/v1/forecast?latitude=%s&longitude=%s"
+               "&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code"
+               "&daily=temperature_2m_max,temperature_2m_min&forecast_days=4&timezone=auto"
+               % (WEATHER_LAT, WEATHER_LON))
+        code, text = http_get(url)
+        import json
+        d = json.loads(text)
+        c = d["current"]
+        content += card("Now", '<div class="clock" style="font-size:54px;letter-spacing:-2px">%s&deg;C</div>'
+                        '<div class="sub">%s</div>' % (c["temperature_2m"], WX.get(c["weather_code"], "Weather code %s" % c["weather_code"])))
+        content += card("Details", row("Humidity", "%s %%" % c["relative_humidity_2m"]) +
+                        row("Wind", "%s km/h" % c["wind_speed_10m"]))
+        dl = d["daily"]
+        rows = ""
+        for i in range(len(dl["time"])):
+            rows += row(dl["time"][i], "%s / %s C" % (round(dl["temperature_2m_max"][i]), round(dl["temperature_2m_min"][i])))
+        content += card("Next days (high / low)", rows)
+    except Exception as e:
+        content += card("Could not load weather", "<span class=muted>Needs internet on the board. " +
+                        esc(repr(e)) + "</span>")
+    return page("Weather", content)
+
+def host_ok(h):
+    if not (0 < len(h) <= 100):
+        return False
+    for ch in h:
+        if not (ch.isalpha() or ch.isdigit() or ch in ".-"):
+            return False
+    return True
+
+def net_run(act, host, port):
+    if act == "ip":
+        code, text = http_get("https://api.ipify.org", 6)
+        return "Public IP: " + text.strip()
+    if not host_ok(host):
+        return "Enter a host name like example.com"
+    if act == "dns":
+        return host + " -> " + socket.getaddrinfo(host, 80)[0][-1][0]
+    if act == "tcp":
+        try:
+            port = int(port)
+        except Exception:
+            port = 80
+        if not 1 <= port <= 65535:
+            return "Port must be 1-65535"
+        addr = socket.getaddrinfo(host, port)[0][-1]
+        t0 = time.ticks_ms()
+        sk = socket.socket()
+        sk.settimeout(4)
+        try:
+            sk.connect(addr)
+        finally:
+            sk.close()
+        return "%s:%d reachable in %d ms" % (host, port, time.ticks_diff(time.ticks_ms(), t0))
+    return "Unknown action"
+
+def page_nettools(result=""):
+    content = "<h1>Net Tools</h1><div class='sub'>Check that your connection and a site are working.</div>"
+    content += card("Check a host", '<form method="POST" action="/nettools">'
+                    '<input name="host" placeholder="example.com" maxlength="100" autocapitalize="off">'
+                    '<input name="port" placeholder="Port (default 80)" inputmode="numeric" maxlength="5">'
+                    '<button name="act" value="dns">DNS lookup</button> '
+                    '<button name="act" value="tcp" class="secondary">Port check</button> '
+                    '<button name="act" value="ip" class="secondary">My public IP</button></form>')
+    if result:
+        content += card("Result", "<pre>" + esc(result) + "</pre>")
+    return page("Net Tools", content)
+
+CAL_HTML = """
+<style>.cg{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;text-align:center;margin-top:12px}
+.cd{padding:11px 0;border-radius:12px;background:#fff}.td{background:#087fff;color:#fff;font-weight:700}</style>
+<h1 id="t">Calendar</h1>
+<button onclick="mv(-1)" class="secondary">&lsaquo; Prev</button> <button onclick="mv(1)" class="secondary">Next &rsaquo;</button>
+<div class="cg" id="g"></div>
+<script>
+var d=new Date(),y=d.getFullYear(),m=d.getMonth();
+function mv(n){m+=n;if(m<0){m=11;y--;}if(m>11){m=0;y++;}draw();}
+function draw(){var f=new Date(y,m,1).getDay(),n=new Date(y,m+1,0).getDate(),now=new Date(),h='';
+ ['Su','Mo','Tu','We','Th','Fr','Sa'].forEach(function(x){h+='<div style="opacity:.5;font-size:12px">'+x+'</div>';});
+ for(var i=0;i<f;i++)h+='<div></div>';
+ for(var k=1;k<=n;k++){var t=(k==now.getDate()&&m==now.getMonth()&&y==now.getFullYear());
+  h+='<div class="cd'+(t?' td':'')+'">'+k+'</div>';}
+ document.getElementById('g').innerHTML=h;
+ document.getElementById('t').textContent=new Date(y,m,1).toLocaleDateString([],{month:'long',year:'numeric'});}
+draw();
+</script>
+"""
+
+CONV_HTML = """
+<h1>Converter</h1><div class="sub">Length, weight, data size and temperature.</div>
+<div class="card"><select id="c" onchange="fill()" style="width:100%;padding:12px;border-radius:12px;border:1px solid #e4e4ec"></select>
+<input id="v" type="number" value="1" oninput="go()" step="any">
+<select id="a" onchange="go()" style="width:100%;padding:12px;border-radius:12px;border:1px solid #e4e4ec;margin:5px 0"></select>
+<div class="calc-display" id="r" style="font-size:24px;min-height:60px"></div>
+<select id="b" onchange="go()" style="width:100%;padding:12px;border-radius:12px;border:1px solid #e4e4ec;margin-top:5px"></select></div>
+<script>
+var U={Length:{mm:.001,cm:.01,m:1,km:1000,inch:.0254,foot:.3048,yard:.9144,mile:1609.344},
+Weight:{g:.001,kg:1,ounce:.028349523,pound:.45359237,tonne:1000},
+Data:{B:1,KB:1024,MB:1048576,GB:1073741824},Temperature:{'C':1,'F':1,'K':1}};
+var c=document.getElementById('c'),a=document.getElementById('a'),b=document.getElementById('b'),v=document.getElementById('v'),r=document.getElementById('r');
+Object.keys(U).forEach(function(k){c.add(new Option(k,k));});
+function fill(){a.innerHTML='';b.innerHTML='';Object.keys(U[c.value]).forEach(function(k,i){a.add(new Option(k,k));b.add(new Option(k,k));});
+ b.selectedIndex=Math.min(1,b.options.length-1);go();}
+function go(){var x=parseFloat(v.value);if(isNaN(x)){r.textContent='';return;}var o;
+ if(c.value=='Temperature'){var k=a.value=='C'?x+273.15:a.value=='F'?(x-32)*5/9+273.15:x;
+  o=b.value=='C'?k-273.15:b.value=='F'?(k-273.15)*9/5+32:k;}
+ else{o=x*U[c.value][a.value]/U[c.value][b.value];}
+ r.textContent=(Math.round(o*1e6)/1e6)+' '+b.value;}
+fill();
+</script>
+"""
+
+SNAKE_HTML = """
+<h1>Snake</h1><div class="sub" id="s">Score: 0. Use arrow keys, swipe, or the buttons.</div>
+<canvas id="cv" width="300" height="300" style="width:100%;max-width:340px;background:#0b0f14;border-radius:16px;touch-action:none;display:block;margin:12px auto"></canvas>
+<div style="text-align:center"><button onclick="dir(0,-1)">&uarr;</button><br>
+<button onclick="dir(-1,0)">&larr;</button> <button onclick="start()" class="secondary">Start</button> <button onclick="dir(1,0)">&rarr;</button><br>
+<button onclick="dir(0,1)">&darr;</button></div>
+<script>
+var cv=document.getElementById('cv'),x=cv.getContext('2d'),N=15,S=20,sn,dx,dy,f,sc,tm=null;
+function start(){sn=[{x:7,y:7}];dx=1;dy=0;sc=0;food();clearInterval(tm);tm=setInterval(step,130);draw();}
+function food(){f={x:Math.floor(Math.random()*N),y:Math.floor(Math.random()*N)};
+ sn.forEach(function(p){if(p.x==f.x&&p.y==f.y)food();});}
+function dir(a,b){if(a==-dx&&b==-dy&&sn&&sn.length>1)return;dx=a;dy=b;}
+function step(){var h={x:sn[0].x+dx,y:sn[0].y+dy};
+ if(h.x<0||h.y<0||h.x>=N||h.y>=N||sn.some(function(p){return p.x==h.x&&p.y==h.y;})){
+  clearInterval(tm);document.getElementById('s').textContent='Game over! Score: '+sc;return;}
+ sn.unshift(h);if(h.x==f.x&&h.y==f.y){sc++;document.getElementById('s').textContent='Score: '+sc;food();}else sn.pop();draw();}
+function draw(){x.fillStyle='#0b0f14';x.fillRect(0,0,300,300);x.fillStyle='#ff5a6a';x.fillRect(f.x*S+2,f.y*S+2,S-4,S-4);
+ x.fillStyle='#4cd964';sn.forEach(function(p,i){x.fillRect(p.x*S+1,p.y*S+1,S-2,S-2);});}
+document.addEventListener('keydown',function(e){var k={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0]}[e.key];
+ if(k){dir(k[0],k[1]);e.preventDefault();}});
+var t0=null;cv.addEventListener('touchstart',function(e){t0=e.touches[0];},{passive:true});
+cv.addEventListener('touchend',function(e){if(!t0)return;var t=e.changedTouches[0],a=t.clientX-t0.clientX,b=t.clientY-t0.clientY;
+ if(Math.abs(a)>Math.abs(b))dir(a>0?1:-1,0);else dir(0,b>0?1:-1);});
+sn=[{x:7,y:7}];dx=1;dy=0;sc=0;food();draw();
+</script>
+"""
+
+PASS_HTML = """
+<h1>Passwords</h1><div class="sub">Made in your browser; nothing is sent or saved.</div>
+<div class="card"><input id="o" readonly style="font-family:monospace;font-size:18px">
+<p class="muted">Length: <b id="ln">16</b></p><input id="l" type="range" min="8" max="64" value="16" oninput="ln.textContent=this.value;gen()">
+<p><label><input type="checkbox" id="u" checked onchange="gen()" style="width:auto"> A-Z</label> &nbsp;
+<label><input type="checkbox" id="d" checked onchange="gen()" style="width:auto"> 0-9</label> &nbsp;
+<label><input type="checkbox" id="s" checked onchange="gen()" style="width:auto"> !@#</label></p>
+<button onclick="gen()">Generate</button> <button class="secondary" onclick="cp()">Copy</button></div>
+<script>
+function gen(){var set='abcdefghijkmnopqrstuvwxyz';if(u.checked)set+='ABCDEFGHJKLMNPQRSTUVWXYZ';
+ if(d.checked)set+='23456789';if(s.checked)set+='!@#$%^&*-_=+?';
+ var n=parseInt(l.value),a=new Uint32Array(n),o='';crypto.getRandomValues(a);
+ for(var i=0;i<n;i++)o+=set[a[i]%set.length];document.getElementById('o').value=o;}
+function cp(){var e=document.getElementById('o');e.select();try{document.execCommand('copy');}catch(x){}}
+gen();
+</script>
+"""
+
+WORLD_HTML = """
+<h1>World clock</h1><div class="sub">Times around the world.</div><div id="w"></div>
+<script>
+var Z=[['Ho Chi Minh','Asia/Ho_Chi_Minh'],['Tokyo','Asia/Tokyo'],['Sydney','Australia/Sydney'],
+['London','Europe/London'],['Paris','Europe/Paris'],['New York','America/New_York'],['Los Angeles','America/Los_Angeles']];
+function tick(){var h='';Z.forEach(function(z){var n=new Date();
+ h+='<div class="card row"><span><b>'+z[0]+'</b><br><span class="muted">'+
+ n.toLocaleDateString([],{timeZone:z[1],weekday:'short',day:'numeric',month:'short'})+'</span></span>'+
+ '<span style="font-size:26px;font-weight:300">'+n.toLocaleTimeString([],{timeZone:z[1],hour:'2-digit',minute:'2-digit'})+'</span></div>';});
+ document.getElementById('w').innerHTML=h;}
+tick();setInterval(tick,5000);
+</script>
+"""
+
+JS_APPS = {"/calendar": ("Calendar", CAL_HTML), "/convert": ("Converter", CONV_HTML),
+           "/snake": ("Snake", SNAKE_HTML), "/passgen": ("Passwords", PASS_HTML),
+           "/world": ("World clock", WORLD_HTML)}
+
+def route_more(client, method, path, body):
+    if path in JS_APPS:
+        title, html = JS_APPS[path]
+        respond(client, page(title, html))
+        return True
+    if path == "/contacts":
+        if method == "POST":
+            act = form_value(body, "act")
+            items = contacts_load()
+            if act == "add":
+                n = clean(form_value(body, "name"), 40)
+                ph = clean(form_value(body, "phone"), 25)
+                if n and ph and len(items) < 100:
+                    items.append((n, ph))
+                    contacts_save(items)
+            elif act[:1] == "d":
+                n, _, ph = act[1:].partition("|")
+                items = [x for x in items if not (x[0] == n and x[1] == ph)]
+                contacts_save(items)
+        respond(client, page_contacts())
+        return True
+    if path == "/weather":
+        respond(client, page_weather())
+        return True
+    if path == "/nettools":
+        result = ""
+        if method == "POST":
+            try:
+                result = net_run(form_value(body, "act"), form_value(body, "host").strip(),
+                                 form_value(body, "port").strip())
+            except Exception as e:
+                result = "Error: " + repr(e)
+        respond(client, page_nettools(result))
+        return True
+    return False
 
 # -------------------- HTTP SERVER ----------------------------
 

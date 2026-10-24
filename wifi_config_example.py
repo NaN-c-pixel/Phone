@@ -6,3 +6,4 @@ PASSWORD = "YOUR_WIFI_PASSWORD"
 # Optional:
 # TERM_PIN = "1234"                        # unlocks the Python prompt in the Terminal app
 # KALI_URL = "http://192.168.1.10:7681"    # a real Kali web terminal (ttyd) on your PC
+# WEATHER_LAT, WEATHER_LON, WEATHER_NAME = 10.82, 106.63, "Ho Chi Minh City"

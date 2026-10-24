@@ -11,6 +11,8 @@ home screen over Wi-Fi; open it from any phone or PC browser on the same network
 - **GPIO** (set/read safe pins, e.g. to drive an LED)
 - **Terminal** (Kali-style shell on the board: files, Wi-Fi, GPIO, `neofetch`; optional PIN-locked Python prompt)
 - **Kali** (opens a *real* Kali Linux shell running on your PC/VM/Pi, see below)
+- **Weather** (live, set your city with `WEATHER_LAT/LON/NAME` in `wifi_config.py`), **Contacts**, **Calendar**
+- **Convert** (units), **Snake**, **Passwords** (generator), **World** clock, **Net Tools** (DNS, port check, public IP)
 - **Wi-Fi**, **Bluetooth** scanner, **Calculator**, **Settings**, **Reboot**
 
 The clock is set from the internet (NTP); change `TZ_HOURS` at the top of `main.py` for your time zone.
