@@ -669,16 +669,74 @@ def temp_c():
         return None
 
 def api_stats():
-    # Keep this endpoint lightweight: the ESP32 serves one JSON snapshot.
+    # Return a compact telemetry snapshot for the Task Manager page.
     gc.collect()
     free = gc.mem_free()
     used = gc.mem_alloc()
+    connected = False
+    rssi = -100
+    ip = ""
+    mac = ""
     try:
-        rssi = wlan.status("rssi") if wlan.isconnected() else -100
+        connected = wlan.isconnected()
     except Exception:
-        rssi = -100
+        pass
+    if connected:
+        try:
+            rssi = wlan.status("rssi")
+        except Exception:
+            rssi = -100
+        try:
+            ip = wlan.ifconfig()[0]
+        except Exception:
+            ip = ""
     try:
-        ip = wlan.ifconfig()[0] if wldef page_monitor():
+        raw_mac = wlan.config("mac")
+        mac = ":".join("%02x" % b for b in raw_mac)
+    except Exception:
+        mac = ""
+    temp = temp_c()
+    try:
+        freq = machine.freq()
+    except Exception:
+        freq = 0
+    try:
+        up = time.ticks_ms() // 1000
+    except Exception:
+        up = 0
+    try:
+        reset = machine.reset_cause()
+    except Exception:
+        reset = -1
+    flash_total = 0
+    flash_free = 0
+    try:
+        st = os.statvfs("/")
+        block_size = st[0]
+        flash_total = st[2] * block_size
+        flash_free = st[3] * block_size
+    except Exception:
+        pass
+    data = {
+        "free": free,
+        "used": used,
+        "heap_total": free + used,
+        "wifi": connected,
+        "rssi": rssi,
+        "ip": ip,
+        "mac": mac,
+        "temp": temp,
+        "freq": freq,
+        "up": up,
+        "reset": reset,
+        "version": sys.version,
+        "platform": sys.platform,
+        "flash_total": flash_total,
+        "flash_free": flash_free
+    }
+    return json.dumps(data)
+
+def page_monitor():
     content = """
 <h1>Task Manager</h1><div class="sub">HungsOS System Monitor · live device telemetry</div>
 <div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
