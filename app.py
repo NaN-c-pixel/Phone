@@ -1577,6 +1577,8 @@ def web_answer(kind, arg):
               "quote": quote_lookup, "price": price_lookup, "aqi": aqi_lookup}[kind]
         out = fn(arg)
     except OSError as e:
+        if str(e).startswith("HTTP"):
+            return "That web service answered with an error (%s). Try again later." % e
         return "I can't reach the internet right now (%s)." % e
     except Exception as e:
         return "The web lookup failed: " + repr(e)
@@ -1749,7 +1751,7 @@ def assist(text):
     if _has(t, "temperature", "how hot", "temp"):
         v = temp_c()
         return "Chip temperature: " + ("unknown" if v is None else "%s C" % v)
-    if _has(t, "ip address", "my ip", "address"):
+    if _has(t, "ip address", "my ip", "your ip"):
         return "I'm at " + wlan.ifconfig()[0]
     if _has(t, "wifi", "signal", "network"):
         return "%s, signal %s dBm" % (SSID, wlan.status("rssi"))
