@@ -32,6 +32,11 @@ except ImportError:
     WEATHER_LAT, WEATHER_LON, WEATHER_NAME = 10.82, 106.63, "Ho Chi Minh City"
 
 try:
+    from wifi_config import WIKI_LANG     # e.g. "vi" for Vietnamese Wikipedia
+except ImportError:
+    WIKI_LANG = "en"
+
+try:
     from wifi_config import KALI_URL      # optional: address of a real Kali web terminal
 except ImportError:
     KALI_URL = ""
@@ -1120,13 +1125,15 @@ WX = {0: "Clear sky", 1: "Mostly clear", 2: "Partly cloudy", 3: "Overcast", 45: 
       63: "Rain", 65: "Heavy rain", 80: "Showers", 81: "Showers", 82: "Heavy showers",
       95: "Thunderstorm", 96: "Thunderstorm", 99: "Thunderstorm"}
 
+UA = {"User-Agent": "HungsOS-ESP32/1.0 (https://github.com/NaN-c-pixel/Phone)"}
+
 def http_get(url, timeout=8):
     try:
         import requests
     except ImportError:
         import urequests as requests
     gc.collect()
-    r = requests.get(url, timeout=timeout)
+    r = requests.get(url, headers=UA, timeout=timeout)
     try:
         return r.status_code, r.text
     finally:
@@ -1360,6 +1367,190 @@ def route_more(client, method, path, body):
     return False
 
 
+
+# -------------------- WEB LOOKUPS (direct APIs, no LLM) -------
+
+web_cache = {}
+
+def urlenc(txt):
+    out = ""
+    for b in txt.encode():
+        c = chr(b)
+        if (b < 128 and (c.isalpha() or c.isdigit())) or c in "-_.~":
+            out += c
+        else:
+            out += "%%%02X" % b
+    return out
+
+def strip_tags(t):
+    out = ""
+    skip = False
+    for ch in t:
+        if ch == "<":
+            skip = True
+        elif ch == ">":
+            skip = False
+        elif not skip:
+            out += ch
+    return out.replace("&quot;", '"').replace("&amp;", "&").replace("&#039;", "'")
+
+def web_json(url):
+    import json
+    code, text = http_get(url)
+    if code != 200:
+        raise OSError("HTTP %d" % code)
+    return json.loads(text)
+
+def clip(t, n=650):
+    t = t.strip()
+    return t if len(t) <= n else t[:n].rsplit(" ", 1)[0] + "..."
+
+def wiki_lookup(q):
+    d = web_json("https://%s.wikipedia.org/w/api.php?action=query&format=json&generator=search"
+                 "&gsrsearch=%s&gsrlimit=1&prop=extracts&exintro=1&explaintext=1&exsentences=4&redirects=1"
+                 % (WIKI_LANG, urlenc(q)))
+    pages = d.get("query", {}).get("pages")
+    if not pages:
+        return None
+    pg = list(pages.values())[0]
+    ext = pg.get("extract", "")
+    if not ext:
+        return None
+    title = pg.get("title", q)
+    return "%s\n%s\n(Source: %s.wikipedia.org/wiki/%s)" % (title, clip(ext), WIKI_LANG, urlenc(title.replace(" ", "_")))
+
+def search_lookup(q):
+    d = web_json("https://api.duckduckgo.com/?q=%s&format=json&no_html=1&skip_disambig=1" % urlenc(q))
+    ans = d.get("Answer") or d.get("AbstractText") or d.get("Definition")
+    if ans:
+        src = d.get("AbstractURL") or d.get("DefinitionURL") or "duckduckgo.com"
+        return "%s\n(Source: %s)" % (clip(str(ans)), src)
+    w = web_json("https://%s.wikipedia.org/w/api.php?action=query&format=json&list=search&srsearch=%s&srlimit=3"
+                 % (WIKI_LANG, urlenc(q)))
+    hits = w.get("query", {}).get("search", [])
+    if not hits:
+        return None
+    lines = []
+    for h in hits:
+        lines.append("- %s: %s" % (h["title"], clip(strip_tags(h.get("snippet", "")), 140)))
+    return "Top results (Wikipedia):\n" + "\n".join(lines) + "\nAsk: wiki <title> for details."
+
+def define_lookup(word):
+    import json
+    code, text = http_get("https://api.dictionaryapi.dev/v2/entries/en/" + urlenc(word.split(" ")[0]))
+    if code != 200:
+        return None
+    e = json.loads(text)[0]
+    m = e["meanings"][0]
+    return "%s (%s): %s" % (e["word"], m["partOfSpeech"], m["definitions"][0]["definition"])
+
+def weather_city(city):
+    g = web_json("https://geocoding-api.open-meteo.com/v1/search?name=%s&count=1" % urlenc(city))
+    res = g.get("results")
+    if not res:
+        return None
+    r = res[0]
+    return weather_text(r["latitude"], r["longitude"], "%s, %s" % (r["name"], r.get("country", "")))
+
+def weather_text(lat, lon, name):
+    d = web_json("https://api.open-meteo.com/v1/forecast?latitude=%s&longitude=%s"
+                 "&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code"
+                 "&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=auto" % (lat, lon))
+    c = d["current"]
+    dl = d["daily"]
+    return "%s: %s C, %s. Humidity %s%%, wind %s km/h. Today %s / %s C." % (
+        name, c["temperature_2m"], WX.get(c["weather_code"], "weather code %s" % c["weather_code"]),
+        c["relative_humidity_2m"], c["wind_speed_10m"],
+        round(dl["temperature_2m_max"][0]), round(dl["temperature_2m_min"][0]))
+
+def currency_lookup(t):
+    amt = 1.0
+    codes = []
+    for w in t.replace(",", "").split():
+        try:
+            amt = float(w)
+            continue
+        except ValueError:
+            pass
+        if len(w) == 3 and w.isalpha() and w not in ("how", "much", "the", "for"):
+            codes.append(w.upper())
+    if len(codes) < 2:
+        return None
+    d = web_json("https://open.er-api.com/v6/latest/" + codes[0])
+    rate = d["rates"].get(codes[1])
+    if rate is None:
+        return "I don't know the currency " + codes[1]
+    return "%s %s = %s %s\n(Rates: open.er-api.com)" % (
+        ("%g" % amt), codes[0], ("{:,.2f}".format(amt * rate)), codes[1])
+
+def web_answer(kind, arg):
+    key = kind + ":" + arg.lower()
+    if key in web_cache:
+        return web_cache[key]
+    try:
+        fn = {"wiki": wiki_lookup, "search": search_lookup, "define": define_lookup,
+              "city": weather_city, "money": currency_lookup}[kind]
+        out = fn(arg)
+    except OSError as e:
+        return "I can't reach the internet right now (%s)." % e
+    except Exception as e:
+        return "The web lookup failed: " + repr(e)
+    if out is None:
+        return "I couldn't find anything for: " + arg
+    if len(web_cache) >= 8:
+        web_cache.pop(list(web_cache)[0])
+    web_cache[key] = out
+    gc.collect()
+    return out
+
+def looks_money(t):
+    if t.startswith(("convert ", "exchange ")):
+        return True
+    if not any(ch.isdigit() for ch in t) or not (" to " in t or " in " in t):
+        return False
+    skip = ("how", "the", "for", "and", "are", "you", "can", "its", "not", "min", "sec", "day")
+    n = 0
+    for w in t.split():
+        if len(w) == 3 and w.isalpha() and w not in skip:
+            n += 1
+    return n >= 2
+
+def web_intent(t, raw):
+    """Return an answer if t is a web request, else None."""
+    for pre in ("wikipedia ", "wiki "):
+        if t.startswith(pre):
+            return web_answer("wiki", raw[len(pre):].strip())
+    for pre in ("search for ", "search ", "google ", "look up ", "lookup ", "find out "):
+        if t.startswith(pre):
+            return web_answer("search", raw[len(pre):].strip())
+    for pre in ("define ", "meaning of ", "definition of "):
+        if t.startswith(pre):
+            return web_answer("define", raw[len(pre):].strip())
+    if t.startswith(("weather in ", "weather at ", "weather for ")):
+        return web_answer("city", raw.split(" ", 2)[2].strip())
+    if t.strip("? ") == "weather" or t.startswith(("what's the weather", "whats the weather", "how's the weather")):
+        try:
+            return weather_text(WEATHER_LAT, WEATHER_LON, WEATHER_NAME)
+        except OSError as e:
+            return "I can't reach the internet right now (%s)." % e
+        except Exception as e:
+            return "The weather lookup failed: " + repr(e)
+    if looks_money(t):
+        r = web_answer("money", t)
+        if not r.startswith("I couldn't find"):
+            return r
+    if t.startswith(("who is ", "who was ", "what is ", "what are ", "what was ", "tell me about ",
+                     "when did ", "where is ", "why is ", "how does ", "how do ")):
+        subj = t
+        for pre in ("tell me about ", "who is ", "who was ", "what is ", "what are ", "what was ", "where is "):
+            if subj.startswith(pre):
+                subj = raw[len(pre):]
+                break
+        else:
+            subj = raw
+        return web_answer("wiki", subj.strip(" ?"))
+    return None
+
 # -------------------- ASSISTANT (tiny, offline) ---------------
 
 OPEN_MAP = (("note", "/notes", "Notes"), ("task", "/todo", "Tasks"), ("todo", "/todo", "Tasks"),
@@ -1420,6 +1611,12 @@ def assist(text):
         items.append([False, item])
         todo_save(items)
         return "Added task: " + item
+    if t.startswith(("wiki", "search", "google", "look up", "lookup", "find out", "define", "meaning of",
+                     "definition of", "weather", "what's the weather", "whats the weather", "how's the weather",
+                     "convert", "exchange")) or (" to " in t and any(ch.isdigit() for ch in t) and len(t) < 40):
+        r = web_intent(t, text.strip())
+        if r is not None:
+            return r
     if _has(t, "my tasks", "how many tasks", "list tasks", "what do i have to do"):
         items = todo_load()
         left = [x[1] for x in items if not x[0]]
@@ -1469,12 +1666,17 @@ def assist(text):
     if _has(t, "help", "what can you do", "commands"):
         return ("Try:\n- what time is it\n- 12*7  /  what is (3+4)/2\n- how much ram / temperature / ip\n"
                 "- add task buy milk  /  my tasks\n- note remember the wifi code\n- open weather\n"
-                "- flip a coin / roll a dice / tell me a joke")
+                "- flip a coin / roll a dice / tell me a joke\n"
+                "Online (direct to free web APIs):\n- wiki Ho Chi Minh City\n- search quantum computing\n"
+                "- weather in Hanoi  /  weather\n- define serendipity\n- 100 usd to vnd\n- who is Ada Lovelace")
+    r = web_intent(t, text.strip())
+    if r is not None:
+        return r
     return "I don't understand that yet. Type help to see what I can do."
 
 def page_assistant():
     content = """
-<h1>Assistant</h1><div class="sub">Tiny, offline, private. Type <b>help</b>.</div>
+<h1>Assistant</h1><div class="sub">Local logic on the board; web facts fetched directly. No cloud AI. Type <b>help</b>.</div>
 <div class="card"><div id="m" style="min-height:200px;max-height:55vh;overflow:auto"></div>
 <div style="display:flex;gap:8px"><input id="q" placeholder="Ask me something..." autocomplete="off" maxlength="200">
 <button onclick="go()">Send</button></div></div>
@@ -1489,7 +1691,7 @@ function go(){var t=q.value.trim();if(!t)return;q.value='';bub(t,true);
  fetch('/api/ask',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'q='+encodeURIComponent(t)})
  .then(function(r){return r.text()}).then(function(x){bub(x,false);}).catch(function(){bub('(board busy, try again)',false);});}
 q.addEventListener('keydown',function(e){if(e.key=='Enter')go();});
-bub('Hi! I can tell you the time, RAM, temperature, do maths, add tasks and open apps. Type help.',false);
+bub('Hi! I answer locally, and look up Wikipedia, search, weather, definitions and exchange rates directly online. Type help.',false);
 </script>
 """
     return page("Assistant", content)
