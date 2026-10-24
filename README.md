@@ -12,6 +12,7 @@ home screen over Wi-Fi; open it from any phone or PC browser on the same network
 - **Terminal** (Kali-style shell on the board: files, Wi-Fi, GPIO, `neofetch`; optional PIN-locked Python prompt)
 - **Kali** (opens a *real* Kali Linux shell running on your PC/VM/Pi, see below)
 - **Bank** (shows the CafeF live stock board, https://liveboard.cafef.vn/)
+- **DOPE AI — Neural Reaction Lab** (emoji-outcome learning simulation with transition counts, reactions and a lab log; no betting or money)
 - **Assistant** (local logic on the board plus direct web lookups, no cloud LLM and no API key: `wiki`, `search`, `weather in <city>`, `define`, `100 usd to vnd`, plus time/RAM/maths/tasks/open apps)
 - **Web Apps** (lightweight shortcuts to official YouTube, TikTok, Instagram, Facebook, X, GitHub, SoundCloud and Wikipedia websites; requires internet)
 - **Weather** (live, set your city with `WEATHER_LAT/LON/NAME` in `wifi_config.py`), **Contacts**, **Calendar**
@@ -69,6 +70,10 @@ python tools/flashtest.py COM6      # use your board's COM port
   and flash MicroPython again.
 - Run `python -m esptool --port COM6 flash_id` first to see the flash maker and size.
 - Post the output in an issue so others can compare their boards.
+
+## Testing
+
+See [`TESTING.md`](TESTING.md) for the hardware test checklist. DOPE AI is an educational random-outcome simulation, not a real betting app or trained neural network.
 
 ## Troubleshooting
 | Problem | Fix |
