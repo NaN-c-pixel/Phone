@@ -335,6 +335,7 @@ def page_home():
         app("⚖️", "Convert", "/convert", "orange"),
         app("🧠", "DOPE AI", "/dope", "purple"),
         app("🐍", "Snake", "/snake", "green"),
+        app("🎮", "Games", "/games", "purple"),
         app("🔑", "Passwords", "/passgen", "purple"),
         app("🌍", "World", "/world", "blue"),
         app("🛜", "Net Tools", "/nettools", "dark"),
@@ -1536,6 +1537,84 @@ DOPE_HTML = r"""
 </script>
 """
 
+GAMES_HTML = r"""
+<h1>🎮 HungsOS Arcade</h1>
+<div class="sub">Tiny games built for your phone · scores stay in this browser</div>
+<div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+ <button onclick="showGame('snake')">🐍 AI Snake</button>
+ <button onclick="showGame('2048')">🔢 2048</button>
+ <button onclick="showGame('memory')">🧠 Memory</button>
+</div>
+<section id="snake" class="card">
+ <h2>🐍 DOPE AI Snake</h2>
+ <p class="muted">Autopilot uses safe-path heuristics and adapts its caution based on previous runs. It is a small game AI, not a neural network.</p>
+ <div class="row"><span>Score <b id="ss">0</b></span><span>Best <b id="sb">0</b></span><span>Runs <b id="sr">0</b></span></div>
+ <canvas id="scv" width="300" height="300" style="width:100%;max-width:340px;background:#0b0f14;border-radius:14px;touch-action:none;display:block;margin:12px auto"></canvas>
+ <div class="row"><button onclick="snakeStart(true)">▶ Start AI</button><button class="secondary" onclick="snakeStart(false)">Manual</button><button class="secondary" onclick="snakeStop()">Stop</button></div>
+ <div class="row" style="justify-content:center;gap:6px"><button onclick="snakeDir(0,-1)">⬆️</button></div>
+ <div class="row" style="justify-content:center;gap:6px"><button onclick="snakeDir(-1,0)">⬅️</button><button onclick="snakeDir(0,1)">⬇️</button><button onclick="snakeDir(1,0)">➡️</button></div>
+ <p id="smsg" class="muted">Press Start AI to watch the snake play.</p>
+</section>
+<section id="2048" class="card" style="display:none">
+ <h2>🔢 2048</h2><p class="muted">Join matching tiles to reach 2048. Use arrow keys, swipe, or buttons.</p>
+ <div class="row"><b>Score: <span id="ts">0</span></b><button onclick="tileStart()">New game</button></div>
+ <div id="tiles" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:12px 0"></div>
+ <div class="row" style="justify-content:center"><button onclick="tileMove('up')">⬆️</button></div>
+ <div class="row" style="justify-content:center"><button onclick="tileMove('left')">⬅️</button><button onclick="tileMove('down')">⬇️</button><button onclick="tileMove('right')">➡️</button></div>
+ <p id="tmsg" class="muted">Make 2048!</p>
+</section>
+<section id="memory" class="card" style="display:none">
+ <h2>🧠 Memory Match</h2><p class="muted">Find all matching pairs with as few moves as possible.</p>
+ <div class="row"><span>Moves <b id="mmoves">0</b></span><span>Pairs <b id="mpairs">0/8</b></span><button onclick="memoryStart()">Restart</button></div>
+ <div id="memgrid" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:12px"></div>
+ <p id="mmsg" class="muted">Tap two cards to find a pair.</p>
+</section>
+<script>
+(function(){
+ var sections=['snake','2048','memory'];
+ window.showGame=function(id){sections.forEach(function(x){document.getElementById(x).style.display=x===id?'block':'none';});};
+ var cv=document.getElementById('scv'),ctx=cv.getContext('2d'),N=15,C=20,snake=[],food={x:10,y:7},dx=1,dy=0,st=null,ai=true,score=0,runs=0,best=0,caution=0;
+ try{var z=JSON.parse(localStorage.getItem('hungos_arcade_snake')||'{}');best=z.best||0;runs=z.runs||0;caution=z.caution||0;}catch(e){}
+ function saveSnake(){try{localStorage.setItem('hungos_arcade_snake',JSON.stringify({best:best,runs:runs,caution:caution}));}catch(e){}}
+ function foodNew(){var tries=0;do{food={x:Math.floor(Math.random()*N),y:Math.floor(Math.random()*N)};tries++;}while(tries<500&&snake.some(function(p){return p.x===food.x&&p.y===food.y;}));}
+ function drawSnake(){ctx.fillStyle='#0b0f14';ctx.fillRect(0,0,300,300);ctx.fillStyle='#ff5a6a';ctx.fillRect(food.x*C+2,food.y*C+2,C-4,C-4);snake.forEach(function(p,i){ctx.fillStyle=i?'#27ae60':'#a3ff68';ctx.fillRect(p.x*C+1,p.y*C+1,C-2,C-2);});}
+ function snakeStats(){document.getElementById('ss').textContent=score;document.getElementById('sb').textContent=best;document.getElementById('sr').textContent=runs;}
+ window.snakeStop=function(){clearInterval(st);st=null;};
+ window.snakeStart=function(useAI){snakeStop();ai=useAI;snake=[{x:7,y:7},{x:6,y:7},{x:5,y:7}];dx=1;dy=0;score=0;foodNew();snakeStats();document.getElementById('smsg').textContent=ai?'AI autopilot is running…':'Manual mode: use arrows or swipe.';st=setInterval(snakeStep,ai?115:145);drawSnake();};
+ window.snakeDir=function(a,b){if(a===-dx&&b===-dy&&snake.length>1)return;dx=a;dy=b;};
+ function safe(x,y,body){return x>=0&&y>=0&&x<N&&y<N&&!body.some(function(p,i){return i<body.length-1&&p.x===x&&p.y===y;});}
+ function aiMove(){
+   var opts=[[1,0],[-1,0],[0,1],[0,-1]],bestMove=null,bestVal=-1e9;
+   opts.forEach(function(d){if(d[0]===-dx&&d[1]===-dy&&snake.length>1)return;var h={x:snake[0].x+d[0],y:snake[0].y+d[1]},body=snake.slice();if(h.x===food.x&&h.y===food.y){}else body.pop();if(!safe(h.x,h.y,body))return;
+     var dist=Math.abs(h.x-food.x)+Math.abs(h.y-food.y),edge=Math.min(h.x,h.y,N-1-h.x,N-1-h.y);
+     var area=0;[[1,0],[-1,0],[0,1],[0,-1]].forEach(function(q){if(safe(h.x+q[0],h.y+q[1],body))area++;});
+     var val=-dist+(area*1.5)+(edge*caution*0.25)+(Math.random()*0.12);
+     if(val>bestVal){bestVal=val;bestMove=d;}
+   });
+   if(bestMove){dx=bestMove[0];dy=bestMove[1];}else{var fallback=opts.find(function(d){var h={x:snake[0].x+d[0],y:snake[0].y+d[1]},b=snake.slice();b.pop();return safe(h.x,h.y,b);});if(fallback){dx=fallback[0];dy=fallback[1];}}
+ }
+ function snakeStep(){if(ai)aiMove();var h={x:snake[0].x+dx,y:snake[0].y+dy},grow=h.x===food.x&&h.y===food.y,body=snake.slice();if(!grow)body.pop();
+   if(!safe(h.x,h.y,body)){snakeStop();runs++;if(score>best)best=score;caution=Math.min(8,caution+0.5);saveSnake();snakeStats();document.getElementById('smsg').textContent='Game over at '+score+'. AI caution adjusted for the next run.';return;}
+   snake.unshift(h);if(grow){score++;if(score>best)best=score;foodNew();}else snake.pop();snakeStats();drawSnake();}
+ var touch=null;cv.addEventListener('touchstart',function(e){touch=e.touches[0];},{passive:true});cv.addEventListener('touchend',function(e){if(!touch)return;var t=e.changedTouches[0],a=t.clientX-touch.clientX,b=t.clientY-touch.clientY;if(Math.abs(a)>Math.abs(b))snakeDir(a>0?1:-1,0);else snakeDir(0,b>0?1:-1);touch=null;});
+ document.addEventListener('keydown',function(e){var d={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0]}[e.key];if(d&&document.getElementById('snake').style.display!=='none'){snakeDir(d[0],d[1]);e.preventDefault();}else if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].indexOf(e.key)>=0&&document.getElementById('2048').style.display!=='none'){tileMove(({ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right'})[e.key]);e.preventDefault();}});
+ snake=[{x:7,y:7},{x:6,y:7}];drawSnake();snakeStats();
+ var board=[],tscore=0;
+ window.tileStart=function(){board=Array(16).fill(0);tscore=0;tileSpawn();tileSpawn();tileRender();document.getElementById('tmsg').textContent='Make 2048!';};
+ function tileSpawn(){var e=[];board.forEach(function(v,i){if(!v)e.push(i);});if(e.length)board[e[Math.floor(Math.random()*e.length)]]=Math.random()<0.9?2:4;}
+ function tileRender(){document.getElementById('ts').textContent=tscore;var h='';board.forEach(function(v){var bg=v===0?'#d9d4cc':v===2?'#eee4da':v===4?'#ede0c8':v===8?'#f2b179':v===16?'#f59563':v===32?'#f67c5f':'#edcf72';h+='<div style="height:56px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:'+bg+';color:#292521;font-weight:800;font-size:20px">'+(v||'')+'</div>';});document.getElementById('tiles').innerHTML=h;}
+ window.tileMove=function(dir){var old=board.join(','),lines=[];for(var n=0;n<4;n++){var ids=[];for(var k=0;k<4;k++)ids.push(dir==='left'?n*4+k:dir==='right'?n*4+(3-k):dir==='up'?k*4+n:(3-k)*4+n);lines.push(ids);}lines.forEach(function(ids){var a=ids.map(function(i){return board[i];}).filter(Boolean),out=[];for(var j=0;j<a.length;j++){if(a[j]===a[j+1]){out.push(a[j]*2);tscore+=a[j]*2;j++;}else out.push(a[j]);}while(out.length<4)out.push(0);ids.forEach(function(id,j){board[id]=out[j];});});if(old!==board.join(',')){tileSpawn();tileRender();if(board.indexOf(2048)>=0)document.getElementById('tmsg').textContent='🎉 You reached 2048!';else if(!board.some(function(v){return v===0;})&&!['left','right','up','down'].some(function(d){return canMove(d);}))document.getElementById('tmsg').textContent='No moves left — start a new game.';}};
+ function canMove(d){var old=board.join(','),copy=board.slice();tileMoveSim(d);var changed=old!==board.join(',');board=copy;return changed;}
+ function tileMoveSim(d){for(var n=0;n<4;n++){var ids=[];for(var k=0;k<4;k++)ids.push(d==='left'?n*4+k:d==='right'?n*4+(3-k):d==='up'?k*4+n:(3-k)*4+n);var a=ids.map(function(i){return board[i];}).filter(Boolean),o=[];for(var j=0;j<a.length;j++){if(a[j]===a[j+1]){o.push(a[j]*2);j++;}else o.push(a[j]);}while(o.length<4)o.push(0);ids.forEach(function(id,j){board[id]=o[j];});}}
+ var cards=[],first=-1,lock=false,mmoves=0,mpairs=0;
+ window.memoryStart=function(){var icons=['🍎','🌙','⭐','🐸','🎈','🍀','🚀','🎵'];cards=icons.concat(icons).sort(function(){return Math.random()-0.5;}).map(function(v){return {v:v,open:false,done:false};});first=-1;lock=false;mmoves=0;mpairs=0;memoryRender();document.getElementById('mmsg').textContent='Tap two cards to find a pair.';};
+ function memoryRender(){document.getElementById('mmoves').textContent=mmoves;document.getElementById('mpairs').textContent=mpairs+'/8';document.getElementById('memgrid').innerHTML=cards.map(function(c,i){return '<button style="height:54px;font-size:24px;padding:4px" '+(c.done?'disabled':'')+' onclick="memoryFlip('+i+')">'+(c.open||c.done?c.v:'❔')+'</button>';}).join('');}
+ window.memoryFlip=function(i){if(lock||cards[i].done||cards[i].open)return;cards[i].open=true;if(first<0){first=i;memoryRender();return;}mmoves++;var a=first;first=-1;if(cards[a].v===cards[i].v){cards[a].done=true;cards[i].done=true;mpairs++;memoryRender();if(mpairs===8)document.getElementById('mmsg').textContent='🎉 All pairs found in '+mmoves+' moves!';}else{lock=true;memoryRender();setTimeout(function(){cards[a].open=false;cards[i].open=false;lock=false;memoryRender();},650);}};
+ window.addEventListener('pagehide',function(){snakeStop();});tileStart();memoryStart();
+})();
+</script>
+"""
+
 WORLD_HTML = """
 <h1>World clock</h1><div class="sub">Times around the world.</div><div id="w"></div>
 <script>
@@ -1550,7 +1629,8 @@ tick();setInterval(tick,5000);
 </script>
 """
 
-JS_APPS = {"/dope": ("DOPE AI — Neural Reaction Lab", DOPE_HTML),
+JS_APPS = {"/games": ("HungsOS Arcade", GAMES_HTML),
+           "/dope": ("DOPE AI — Neural Reaction Lab", DOPE_HTML),
            "/calendar": ("Calendar", CAL_HTML), "/convert": ("Converter", CONV_HTML),
            "/snake": ("Snake", SNAKE_HTML), "/passgen": ("Passwords", PASS_HTML),
            "/world": ("World clock", WORLD_HTML)}
