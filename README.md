@@ -11,6 +11,7 @@ home screen over Wi-Fi; open it from any phone or PC browser on the same network
 - **GPIO** (set/read safe pins, e.g. to drive an LED)
 - **Terminal** (Kali-style shell on the board: files, Wi-Fi, GPIO, `neofetch`; optional PIN-locked Python prompt)
 - **Kali** (opens a *real* Kali Linux shell running on your PC/VM/Pi, see below)
+- **Bank** (shows the CafeF live stock board, https://liveboard.cafef.vn/)
 - **Assistant** (local logic on the board plus direct web lookups, no cloud LLM and no API key: `wiki`, `search`, `weather in <city>`, `define`, `100 usd to vnd`, plus time/RAM/maths/tasks/open apps)
 - **Weather** (live, set your city with `WEATHER_LAT/LON/NAME` in `wifi_config.py`), **Contacts**, **Calendar**
 - **Convert** (units), **Snake**, **Passwords** (generator), **World** clock, **Net Tools** (DNS, port check, public IP)
@@ -39,7 +40,7 @@ The clock is set from the internet (NTP); change `TZ_HOURS` at the top of `main.
 ## How the Assistant gets web facts
 It calls free public APIs directly from the board over HTTPS and parses the JSON itself:
 Wikipedia (`wiki`, `who is ...`), DuckDuckGo instant answers (`search`), Open-Meteo (weather),
-dictionaryapi.dev (`define`) and open.er-api.com (currency). Only your query is sent; nothing is logged.
+dictionaryapi.dev (`define`), open.er-api.com (currency), VnExpress and BBC RSS (`news`, `world news`), ZenQuotes (`quote`), Open-Meteo air quality (`air quality`, `aqi in Hanoi`) and CoinGecko (`bitcoin`, `price of eth`). Only your query is sent; nothing is logged.
 Set `WIKI_LANG = "vi"` in `wifi_config.py` for Vietnamese Wikipedia. A web lookup can block the board for up to
 8 seconds, and answers are cached so repeat questions are instant.
 
