@@ -333,6 +333,7 @@ def page_home():
         app("👤", "Contacts", "/contacts", "green"),
         app("📅", "Calendar", "/calendar", "pink"),
         app("⚖️", "Convert", "/convert", "orange"),
+        app("🧠", "DOPE AI", "/dope", "purple"),
         app("🐍", "Snake", "/snake", "green"),
         app("🔑", "Passwords", "/passgen", "purple"),
         app("🌍", "World", "/world", "blue"),
@@ -1438,6 +1439,103 @@ gen();
 </script>
 """
 
+DOPE_HTML = r"""
+<h1>🧠 DOPE AI</h1>
+<div class="sub">Neural Reaction Lab · a no-money learning experiment</div>
+<div class="card" style="text-align:center">
+  <div class="muted">AI REACTION</div>
+  <div id="face" style="font-size:64px;margin:12px">🤔</div>
+  <div id="reaction" style="font-size:19px;font-weight:750">Ready to learn?</div>
+  <div id="detail" class="muted" style="margin-top:7px">Run a round to observe a random outcome.</div>
+</div>
+<div class="card">
+  <div class="card-title">Next-outcome guess</div>
+  <div class="row"><span class="muted">AI predicts</span><span id="guess" class="value">—</span></div>
+  <div class="row"><span class="muted">Confidence</span><span id="confidence" class="value">No data yet</span></div>
+  <div class="row"><span class="muted">Last outcome</span><span id="last" class="value">—</span></div>
+  <button class="full" id="run">⚡ Run reaction</button>
+  <button class="full secondary" id="reset" style="margin-top:9px">Reset experiment</button>
+</div>
+<div class="grid">
+  <div class="card"><div class="muted">ROUNDS</div><div id="rounds" style="font-size:28px;font-weight:750">0</div></div>
+  <div class="card"><div class="muted">CORRECT GUESSES</div><div id="correct" style="font-size:28px;font-weight:750">0</div></div>
+  <div class="card"><div class="muted">ACCURACY</div><div id="accuracy" style="font-size:28px;font-weight:750">—</div></div>
+</div>
+<div class="card">
+  <div class="card-title">🧪 How the tiny model learns</div>
+  <p class="muted">It counts which emoji tends to follow the previous emoji, then guesses the most frequent next one. Each round updates its transition table. Outcomes are random, so the model may not predict better than chance.</p>
+  <p class="muted">Educational simulation only: no bets, money, purchases, or prizes. This is a small adaptive rule, not a trained neural network.</p>
+</div>
+<div class="card">
+  <div class="card-title">Recent lab log</div>
+  <div id="log" class="muted">No rounds yet.</div>
+</div>
+<script>
+(function(){
+  var symbols = ["🍎","🌙","⭐","🪐"];
+  var labels = {"🍎":"Apple","🌙":"Moon","⭐":"Star","🪐":"Planet"};
+  var key = "dope_neural_reaction_lab_v1";
+  var state = {rounds:0,correct:0,last:"",transitions:{},log:[]};
+  try {
+    var saved = localStorage.getItem(key);
+    if(saved) {
+      var parsed = JSON.parse(saved);
+      if(parsed && parsed.transitions && Array.isArray(parsed.log)) state = parsed;
+    }
+  } catch(e) {}
+  function save(){try{localStorage.setItem(key,JSON.stringify(state));}catch(e){}}
+  function predict(from){
+    if(!from || !state.transitions[from]) return {symbol:symbols[Math.floor(Math.random()*symbols.length)],confidence:25,known:false};
+    var counts = state.transitions[from], best = symbols[0], total = 0, high = -1;
+    for(var i=0;i<symbols.length;i++){
+      var n = counts[symbols[i]] || 0; total += n;
+      if(n > high){high=n;best=symbols[i];}
+    }
+    return {symbol:best,confidence:total ? Math.round(high/total*100) : 25,known:total>0};
+  }
+  function render(){
+    document.getElementById("rounds").textContent=state.rounds;
+    document.getElementById("correct").textContent=state.correct;
+    document.getElementById("accuracy").textContent=state.rounds ? Math.round(state.correct/state.rounds*100)+"%" : "—";
+    document.getElementById("last").textContent=state.last || "—";
+    var html="";
+    for(var i=0;i<state.log.length;i++) html += "<div style='padding:7px 0;border-bottom:1px solid #e7e7ed'>"+state.log[i]+"</div>";
+    document.getElementById("log").innerHTML=html || "No rounds yet.";
+    var p=predict(state.last);
+    document.getElementById("guess").textContent=p.symbol+" "+labels[p.symbol];
+    document.getElementById("confidence").textContent=p.known ? p.confidence+"% of observed transitions" : "Cold start";
+  }
+  document.getElementById("run").addEventListener("click",function(){
+    var p=predict(state.last);
+    var outcome=symbols[Math.floor(Math.random()*symbols.length)];
+    var hit=p.symbol===outcome;
+    state.rounds++;
+    if(hit) state.correct++;
+    var face=hit?"🤩":(state.rounds%3===0?"😮":"🤔");
+    document.getElementById("face").textContent=face;
+    document.getElementById("reaction").textContent=hit?"Prediction matched!":"Unexpected outcome!";
+    document.getElementById("detail").textContent="AI guessed "+p.symbol+"; the random outcome was "+outcome+".";
+    if(state.last){
+      if(!state.transitions[state.last]) state.transitions[state.last]={};
+      state.transitions[state.last][outcome]=(state.transitions[state.last][outcome]||0)+1;
+    }
+    state.last=outcome;
+    state.log.unshift("#"+state.rounds+" · guess "+p.symbol+" · result "+outcome+" · "+(hit?"match":"miss"));
+    if(state.log.length>8)state.log.length=8;
+    save();render();
+  });
+  document.getElementById("reset").addEventListener("click",function(){
+    state={rounds:0,correct:0,last:"",transitions:{},log:[]};
+    document.getElementById("face").textContent="🤔";
+    document.getElementById("reaction").textContent="Ready to learn?";
+    document.getElementById("detail").textContent="Run a round to observe a random outcome.";
+    save();render();
+  });
+  render();
+})();
+</script>
+"""
+
 WORLD_HTML = """
 <h1>World clock</h1><div class="sub">Times around the world.</div><div id="w"></div>
 <script>
@@ -1452,7 +1550,8 @@ tick();setInterval(tick,5000);
 </script>
 """
 
-JS_APPS = {"/calendar": ("Calendar", CAL_HTML), "/convert": ("Converter", CONV_HTML),
+JS_APPS = {"/dope": ("DOPE AI — Neural Reaction Lab", DOPE_HTML),
+           "/calendar": ("Calendar", CAL_HTML), "/convert": ("Converter", CONV_HTML),
            "/snake": ("Snake", SNAKE_HTML), "/passgen": ("Passwords", PASS_HTML),
            "/world": ("World clock", WORLD_HTML)}
 
