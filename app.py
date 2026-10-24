@@ -26,6 +26,16 @@ except ImportError:
     SSID = "YOUR_WIFI_NAME"
     PASSWORD = "YOUR_WIFI_PASSWORD"
 
+try:
+    from wifi_config import KALI_URL      # optional: address of a real Kali web terminal
+except ImportError:
+    KALI_URL = ""
+
+try:
+    from wifi_config import TERM_PIN      # optional: PIN that unlocks the Python prompt
+except ImportError:
+    TERM_PIN = ""
+
 TZ_HOURS = 7          # Vietnam (UTC+7); change for other time zones
 SYNCED = False        # becomes True once the clock is set from the internet
 
@@ -294,6 +304,8 @@ def page_home():
         app("🔌", "GPIO", "/gpio", "purple") +
         app("📶", "Wi-Fi", "/wifi", "green") +
         app("ᛒ", "Bluetooth", "/bluetooth", "purple") +
+        app("⌨", "Terminal", "/terminal", "dark") +
+        app("🐉", "Kali", "/kali", "blue") +
         app("🧮", "Calculator", "/calc", "orange") +
         app("⚙️", "Settings", "/system", "dark") +
         app("🔄", "Reboot", "/reboot", "pink")
@@ -704,6 +716,22 @@ def route_extra(client, method, path, query, body):
                 print("todo error:", e)
         respond(client, page_todo())
         return True
+    if path == "/kali":
+        respond(client, page_kali())
+        return True
+    if path == "/terminal":
+        respond(client, page_terminal())
+        return True
+    if path == "/api/term":
+        if method != "POST":
+            respond(client, "POST only", "405 Method Not Allowed", "text/plain")
+            return True
+        out = run_cmd(form_value(body, "cmd"))
+        respond(client, out, content_type="text/plain; charset=utf-8")
+        if REBOOT:
+            time.sleep(1)
+            machine.reset()
+        return True
     if path == "/timer":
         respond(client, page_timer())
         return True
@@ -755,6 +783,279 @@ def sync_time():
         print("Time synced from the internet.")
     except Exception as e:
         print("Time sync failed (clock stays blank):", e)
+
+
+# -------------------- TERMINAL --------------------------------
+
+CLIENT_IP = ""
+term_ok_ip = ""      # IP address that unlocked the Python prompt
+term_ns = {}
+REBOOT = False
+
+TERM_HELP = """Commands:
+  help                 this list
+  ls [dir]             list files
+  cat FILE             show a file
+  echo TEXT > FILE     write (>>  to append)
+  cp A B | mv A B      copy / rename
+  rm FILE              delete a file
+  mkdir D | rmdir D    make / remove a folder
+  pwd  df  free  uptime  ip  temp  date
+  whoami id hostname uname neofetch ifconfig
+  sudo CMD  (runs CMD; the board has one user)
+  wifi [scan]          Wi-Fi status / networks
+  gpio PIN [1|0|r]     set or read a pin
+  reboot               restart the board
+  login PIN            unlock the Python prompt
+  py CODE              run Python (needs login)
+Tip: Up/Down arrows recall history."""
+
+def term_path_ok(name):
+    return name not in PROTECTED
+
+def run_cmd(line):
+    global term_ok_ip, REBOOT
+    out = []
+
+    def p(*a):
+        out.append(" ".join(str(x) for x in a))
+
+    line = line.strip()
+    if not line:
+        return ""
+    parts = line.split()
+    c = parts[0]
+    args = parts[1:]
+    try:
+        if c == "help":
+            p(TERM_HELP)
+        elif c == "ls":
+            d = args[0] if args else "."
+            for n in sorted(os.listdir(d)):
+                full = n if d in (".", "/") else d.rstrip("/") + "/" + n
+                st = os.stat(full)
+                p(("d  " if st[0] & 0x4000 else "-  ") + n +
+                  ("" if st[0] & 0x4000 else "  (%d B)" % st[6]))
+        elif c == "cat":
+            with open(args[0]) as f:
+                t = f.read(4000)
+                more = f.read(1)
+            p(t + ("\n...(truncated)" if more else ""))
+        elif c == "rm":
+            if not term_path_ok(args[0]):
+                p("protected file")
+            else:
+                os.remove(args[0])
+        elif c == "mkdir":
+            os.mkdir(args[0])
+        elif c == "rmdir":
+            os.rmdir(args[0])
+        elif c == "mv":
+            if not term_path_ok(args[0]) or not term_path_ok(args[1]):
+                p("protected file")
+            else:
+                os.rename(args[0], args[1])
+        elif c == "cp":
+            if not term_path_ok(args[1]):
+                p("protected file")
+            else:
+                with open(args[0], "rb") as a, open(args[1], "wb") as b:
+                    while True:
+                        chunk = a.read(512)
+                        if not chunk:
+                            break
+                        b.write(chunk)
+        elif c == "echo":
+            rest = line[4:].strip()
+            mode = None
+            if ">>" in rest:
+                text, _, name = rest.partition(">>")
+                mode = "a"
+            elif ">" in rest:
+                text, _, name = rest.partition(">")
+                mode = "w"
+            if mode:
+                name = name.strip()
+                if not valid_name(name):
+                    p("bad file name")
+                elif not term_path_ok(name):
+                    p("protected file")
+                else:
+                    with open(name, mode) as f:
+                        f.write(text.strip() + "\n")
+            else:
+                p(rest)
+        elif c == "sudo":
+            return run_cmd(line[4:])
+        elif c in ("ll", "dir"):
+            return run_cmd("ls " + " ".join(args))
+        elif c in ("ifconfig", "ip"):
+            ifc = wlan.ifconfig()
+            p("wlan0: inet %s  netmask %s" % (ifc[0], ifc[1]))
+            p("        gateway %s  dns %s" % (ifc[2], ifc[3]))
+            p("        ssid %s  signal %s dBm" % (SSID, wlan.status("rssi")))
+        elif c in ("iwlist", "iwscan"):
+            return run_cmd("wifi scan")
+        elif c == "whoami":
+            p("kali")
+        elif c == "id":
+            p("uid=1000(kali) gid=1000(kali) groups=1000(kali),27(sudo)")
+        elif c == "hostname":
+            p("esp32")
+        elif c == "uname":
+            u = os.uname()
+            if args and args[0] == "-a":
+                p("MicroPython esp32 %s %s %s" % (u[2], u[3], u[4]))
+            else:
+                p("MicroPython")
+        elif c == "neofetch":
+            gc.collect()
+            u = os.uname()
+            sec = time.ticks_ms() // 1000
+            v = os.statvfs("/")
+            p("kali@esp32")
+            p("-----------")
+            p("OS:      MicroPython %s" % u[2])
+            p("Host:    %s" % u[4])
+            p("Uptime:  %dh %dm" % (sec // 3600, sec % 3600 // 60))
+            p("CPU:     ESP32-S3 @ %d MHz" % (machine.freq() // 1000000))
+            p("Memory:  %d / %d KB" % (gc.mem_alloc() // 1024,
+                                        (gc.mem_alloc() + gc.mem_free()) // 1024))
+            p("Disk:    %d / %d KB" % ((v[2] - v[3]) * v[0] // 1024, v[2] * v[0] // 1024))
+            p("Network: %s" % wlan.ifconfig()[0])
+        elif c == "pwd":
+            p(os.getcwd())
+        elif c == "df":
+            v = os.statvfs("/")
+            p("total %d KB, free %d KB" % (v[0] * v[2] // 1024, v[0] * v[3] // 1024))
+        elif c == "free":
+            gc.collect()
+            p("free %d KB, used %d KB" % (gc.mem_free() // 1024, gc.mem_alloc() // 1024))
+        elif c == "uptime":
+            sec = time.ticks_ms() // 1000
+            p("%dh %dm %ds" % (sec // 3600, sec % 3600 // 60, sec % 60))
+        elif c == "ip":
+            p(" ".join(wlan.ifconfig()))
+        elif c == "temp":
+            t = temp_c()
+            p("n/a" if t is None else "%s C" % t)
+        elif c == "date":
+            if SYNCED:
+                n = time.localtime(time.time() + TZ_HOURS * 3600)
+                p("%04d-%02d-%02d %02d:%02d:%02d" % n[:6])
+            else:
+                p("clock not synced")
+        elif c == "wifi":
+            if args and args[0] == "scan":
+                nets = wlan.scan()
+                nets.sort(key=lambda n: -n[3])
+                for n in nets[:12]:
+                    p("%4d dBm  ch%-2d  %s" % (n[3], n[2], n[0].decode()))
+            else:
+                p("connected" if wlan.isconnected() else "disconnected",
+                  SSID, "rssi", wlan.status("rssi"))
+        elif c == "gpio":
+            pin = int(args[0])
+            if pin not in GPIO_OK:
+                p("GPIO %d not allowed" % pin)
+            elif len(args) < 2 or args[1] == "r":
+                p("GPIO %d = %d" % (pin, machine.Pin(pin, machine.Pin.IN).value()))
+            else:
+                v = 1 if args[1] == "1" else 0
+                machine.Pin(pin, machine.Pin.OUT).value(v)
+                gpio_state[pin] = v
+                p("GPIO %d = %d" % (pin, v))
+        elif c == "reboot":
+            REBOOT = True
+            p("Rebooting... reload the page in ~15 s.")
+        elif c == "login":
+            if not TERM_PIN:
+                p("No PIN set. Add TERM_PIN = \"1234\" to wifi_config.py on the board.")
+            elif args and args[0] == TERM_PIN:
+                term_ok_ip = CLIENT_IP
+                p("Python prompt unlocked for", CLIENT_IP, "(until reboot).")
+            else:
+                p("Wrong PIN.")
+        elif c == "py":
+            if not TERM_PIN or term_ok_ip != CLIENT_IP:
+                p("Locked. Set TERM_PIN in wifi_config.py, then: login PIN")
+            else:
+                code = line[2:].strip()
+                if not term_ns:
+                    term_ns.update({"os": os, "gc": gc, "time": time, "machine": machine})
+                term_ns["print"] = p
+                try:
+                    r = eval(code, term_ns)
+                    if r is not None:
+                        p(repr(r))
+                except SyntaxError:
+                    exec(code, term_ns)
+        else:
+            p("unknown command: " + c + "  (type help)")
+    except IndexError:
+        p("missing argument  (type help)")
+    except Exception as e:
+        p("error:", repr(e))
+    return "\n".join(out)[:4000]
+
+def page_kali():
+    if not KALI_URL:
+        content = """
+<h1>Kali Linux</h1>
+<div class="sub">A real Kali shell, running on a computer you own and shown on this screen.</div>
+""" + card("Set it up (one time)", """
+<p><b>1.</b> On your PC, install Kali in WSL (PowerShell):<br>
+<code>wsl --install -d kali-linux</code></p>
+<p><b>2.</b> In Kali, start a web terminal protected by a login:<br>
+<code>sudo apt install ttyd<br>ttyd -p 7681 -c kali:YOUR_PASSWORD bash</code></p>
+<p><b>3.</b> Find your PC's address (<code>ipconfig</code>, e.g. 192.168.1.10), then add to
+<code>wifi_config.py</code> on the board:<br>
+<code>KALI_URL = "http://192.168.1.10:7681"</code></p>
+<p class="muted">Use it on your home Wi-Fi only. Never expose that port to the internet.</p>
+""")
+        return page("Kali", content)
+    content = ("<h1>Kali Linux</h1>"
+               '<a class="button full" target="_blank" href="' + esc(KALI_URL) + '">Open full screen</a>'
+               '<iframe src="' + esc(KALI_URL) + '" style="width:100%;height:65vh;border:0;'
+               'border-radius:16px;background:#000;margin-top:12px"></iframe>'
+               '<p class="muted">Blank? Start <code>ttyd</code> on the Kali machine, then reload.</p>')
+    return page("Kali", content)
+
+def page_terminal():
+    content = """
+<h1>Terminal</h1><div class="sub">Kali-style shell on an ESP32. Type <b>help</b>.</div>
+<style>
+.kt{background:#0c0f14;color:#d6dbe3;border-radius:14px;padding:12px;margin-top:12px;
+font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.35}
+.kt pre{margin:0;white-space:pre-wrap;word-break:break-word;min-height:240px;max-height:58vh;overflow:auto;font:inherit}
+.kb{color:#3b8eea}.ku{color:#5fb3ff;font-weight:700}.kw{color:#d6dbe3}
+.kt input{flex:1;background:transparent;border:0;color:#fff;margin:0;padding:0;font:inherit;outline:none}
+</style>
+<div class="kt"><pre id="o"></pre>
+<div><span class="kb">&#9484;&#9472;&#9472;(</span><span class="ku">kali&#12847;esp32</span><span class="kb">)-[</span><span class="kw">~</span><span class="kb">]</span></div>
+<div style="display:flex;gap:6px"><span class="kb">&#9492;&#9472;</span><span class="ku">$</span>
+<input id="i" autocomplete="off" autocapitalize="off" spellcheck="false"></div></div>
+<script>
+var o=document.getElementById('o'),i=document.getElementById('i'),h=[],hi=0;
+function sp(c,t){var e=document.createElement('span');e.className=c;e.textContent=t;o.appendChild(e);}
+function say(t){o.appendChild(document.createTextNode(t+'\\n'));o.scrollTop=o.scrollHeight;}
+function prompt(c){sp('kb','\u250c\u2500\u2500(');sp('ku','kali\u322fesp32');sp('kb',')-[');sp('kw','~');sp('kb',']\\n');
+ sp('kb','\u2514\u2500');sp('ku','$ ');say(c);}
+say('  Kali-style shell on ESP32-S3 / MicroPython');
+say('  Type help for commands, neofetch for system info.\\n');
+i.addEventListener('keydown',function(e){
+ if(e.key=='ArrowUp'){if(hi>0)hi--;i.value=h[hi]||'';e.preventDefault();}
+ else if(e.key=='ArrowDown'){if(hi<h.length)hi++;i.value=h[hi]||'';e.preventDefault();}
+ else if(e.key=='Enter'){var c=i.value;i.value='';if(!c.trim())return;
+  h.push(c);hi=h.length;prompt(c);
+  if(c.trim()=='clear'){o.textContent='';return;}
+  fetch('/api/term',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+   body:'cmd='+encodeURIComponent(c)}).then(function(r){return r.text()})
+  .then(function(t){if(t)say(t);}).catch(function(){say('(no answer: board busy or rebooting)');});}});
+i.focus();
+</script>
+"""
+    return page("Terminal", content)
 
 # -------------------- HTTP SERVER ----------------------------
 
@@ -915,6 +1216,8 @@ def serve():
         try:
             try:
                 client, address = server.accept()
+                global CLIENT_IP
+                CLIENT_IP = address[0]
             except OSError:
                 continue
             try:

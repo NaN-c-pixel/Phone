@@ -2,3 +2,7 @@
 # wifi_config.py is git-ignored so your password never gets pushed.
 SSID = "YOUR_WIFI_NAME"
 PASSWORD = "YOUR_WIFI_PASSWORD"
+
+# Optional:
+# TERM_PIN = "1234"                        # unlocks the Python prompt in the Terminal app
+# KALI_URL = "http://192.168.1.10:7681"    # a real Kali web terminal (ttyd) on your PC
