@@ -736,27 +736,6 @@ tick();setInterval(tick,3000);
 </script>
 """
     return page("Task Manager", content)
-text-align:left"></div></div>
-<canvas id="ch" width="500" height="120" style="width:100%;background:#fff;border-radius:20px"></canvas>
-<script>
-var hist=[];
-function tick(){fetch('/api/stats').then(function(r){return r.json()}).then(function(d){
- var tot=d.free+d.used,p=Math.round(d.used*100/tot);
- document.getElementById('rb').style.width=p+'%';
- document.getElementById('rt').textContent=Math.round(d.used/1024)+' KB of '+Math.round(tot/1024)+' KB ('+p+'%)';
- document.getElementById('wi').textContent=d.rssi+' dBm';
- document.getElementById('tp').textContent=d.temp===null?'n/a':d.temp+' °C';
- var s=d.up;document.getElementById('up').textContent=Math.floor(s/3600)+'h '+Math.floor(s%3600/60)+'m '+(s%60)+'s';
- hist.push(d.rssi);if(hist.length>40)hist.shift();
- var c=document.getElementById('ch').getContext('2d');c.clearRect(0,0,500,120);
- c.strokeStyle='#087fff';c.lineWidth=2;c.beginPath();
- hist.forEach(function(v,i){var x=i*500/39,y=120-((v+100)/70)*110-5;if(i)c.lineTo(x,y);else c.moveTo(x,y);});c.stroke();
- }).catch(function(){});}
-tick();setInterval(tick,2000);
-</script>
-"""
-    return page("Monitor", content)
-
 def page_gpio(msg=""):
     rows = ""
     for p in sorted(gpio_state):
