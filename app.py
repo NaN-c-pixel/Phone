@@ -13,6 +13,12 @@ import gc
 import machine
 import sys
 
+# Optional feature modules fail closed so a missing module won't stop boot.
+try:
+    import social_apps
+except ImportError:
+    social_apps = None
+
 try:
     import bluetooth
 except ImportError:
@@ -308,6 +314,7 @@ def page_home():
     apps = (
         app("📝", "Notes", "/notes", "yellow") +
         app("🤖", "Assistant", "/assistant", "purple") +
+        app("🌐", "Web Apps", "/social", "blue") +
         app("💹", "Bank", "/bank", "green") +
         app("☀️", "Weather", "/weather", "teal") +
         app("👤", "Contacts", "/contacts", "green") +
@@ -715,6 +722,9 @@ def page_edit(name, msg=""):
 
 def route_extra(client, method, path, query, body):
     """Returns True if the request was handled here."""
+    if path == "/social" and social_apps is not None:
+        respond(client, page("Web Apps", social_apps.content()))
+        return True
     if route_more(client, method, path, body):
         return True
     if path == "/api/stats":
