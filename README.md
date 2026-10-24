@@ -11,7 +11,7 @@ home screen over Wi-Fi; open it from any phone or PC browser on the same network
 - **GPIO** (set/read safe pins, e.g. to drive an LED)
 - **Terminal** (Kali-style shell on the board: files, Wi-Fi, GPIO, `neofetch`; optional PIN-locked Python prompt)
 - **Kali** (opens a *real* Kali Linux shell running on your PC/VM/Pi, see below)
-- **Assistant** (tiny offline chatbot: time, RAM, temperature, maths, add tasks, open apps; no cloud or API key)
+- **Assistant** (local logic on the board plus direct web lookups, no cloud LLM and no API key: `wiki`, `search`, `weather in <city>`, `define`, `100 usd to vnd`, plus time/RAM/maths/tasks/open apps)
 - **Weather** (live, set your city with `WEATHER_LAT/LON/NAME` in `wifi_config.py`), **Contacts**, **Calendar**
 - **Convert** (units), **Snake**, **Passwords** (generator), **World** clock, **Net Tools** (DNS, port check, public IP)
 - **Wi-Fi**, **Bluetooth** scanner, **Calculator**, **Settings**, **Reboot**
@@ -35,6 +35,13 @@ The clock is set from the internet (NTP); change `TZ_HOURS` at the top of `main.
    `app.py` (the real program) and `wifi_config.py`. For the last one, copy
    `wifi_config_example.py`, fill in your 2.4 GHz network name and password.
 4. Press RESET. The shell prints `Open http://192.168.x.x` — visit that address.
+
+## How the Assistant gets web facts
+It calls free public APIs directly from the board over HTTPS and parses the JSON itself:
+Wikipedia (`wiki`, `who is ...`), DuckDuckGo instant answers (`search`), Open-Meteo (weather),
+dictionaryapi.dev (`define`) and open.er-api.com (currency). Only your query is sent; nothing is logged.
+Set `WIKI_LANG = "vi"` in `wifi_config.py` for Vietnamese Wikipedia. A web lookup can block the board for up to
+8 seconds, and answers are cached so repeat questions are instant.
 
 ## Real Kali on the phone
 An ESP32 cannot run Kali itself (it needs a Linux kernel and gigabytes of storage), so the **Kali** app
