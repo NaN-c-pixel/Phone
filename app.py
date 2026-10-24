@@ -308,6 +308,7 @@ def page_home():
     apps = (
         app("📝", "Notes", "/notes", "yellow") +
         app("🤖", "Assistant", "/assistant", "purple") +
+        app("💹", "Bank", "/bank", "green") +
         app("☀️", "Weather", "/weather", "teal") +
         app("👤", "Contacts", "/contacts", "green") +
         app("📅", "Calendar", "/calendar", "pink") +
@@ -1318,6 +1319,9 @@ JS_APPS = {"/calendar": ("Calendar", CAL_HTML), "/convert": ("Converter", CONV_H
            "/world": ("World clock", WORLD_HTML)}
 
 def route_more(client, method, path, body):
+    if path == "/bank":
+        respond(client, page_bank())
+        return True
     if path == "/assistant":
         respond(client, page_assistant())
         return True
@@ -1367,6 +1371,18 @@ def route_more(client, method, path, body):
     return False
 
 
+
+
+BANK_URL = "https://liveboard.cafef.vn/"
+
+def page_bank():
+    content = ("<h1>Bank</h1><div class='sub'>Live stock board from CafeF (loaded by your browser, not the board).</div>"
+               '<a class="button full" target="_blank" href="' + BANK_URL + '">Open full screen</a>'
+               '<iframe src="' + BANK_URL + '" style="width:100%;height:72vh;border:0;border-radius:16px;'
+               'background:#fff;margin-top:12px"></iframe>'
+               '<p class="muted">If the board above stays blank, the site does not allow embedding. '
+               'Use <b>Open full screen</b>.</p>')
+    return page("Bank", content)
 
 # -------------------- WEB LOOKUPS (direct APIs, no LLM) -------
 
@@ -1483,13 +1499,82 @@ def currency_lookup(t):
     return "%s %s = %s %s\n(Rates: open.er-api.com)" % (
         ("%g" % amt), codes[0], ("{:,.2f}".format(amt * rate)), codes[1])
 
+
+COINS = {"bitcoin": "bitcoin", "btc": "bitcoin", "ethereum": "ethereum", "eth": "ethereum",
+         "bnb": "binancecoin", "doge": "dogecoin", "dogecoin": "dogecoin", "sol": "solana",
+         "solana": "solana", "xrp": "ripple", "ada": "cardano", "ton": "the-open-network"}
+
+def unent(t):
+    return (t.replace("<![CDATA[", "").replace("]]>", "").replace("&amp;", "&").replace("&quot;", '"')
+            .replace("&#39;", "'").replace("&apos;", "'").replace("&lt;", "<").replace("&gt;", ">").strip())
+
+def rss_titles(url, n=6):
+    code, text = http_get(url)
+    if code != 200:
+        raise OSError("HTTP %d" % code)
+    out = []
+    pos = 0
+    while len(out) < n:
+        i = text.find("<item>", pos)
+        if i < 0:
+            break
+        j = text.find("<title>", i)
+        k = text.find("</title>", j)
+        if j < 0 or k < 0:
+            break
+        out.append(unent(text[j + 7:k]))
+        pos = k
+    return out
+
+def news_lookup(kind):
+    if kind == "world":
+        url, src = "https://feeds.bbci.co.uk/news/rss.xml", "BBC News"
+    else:
+        url, src = "https://vnexpress.net/rss/tin-moi-nhat.rss", "VnExpress"
+    titles = rss_titles(url)
+    if not titles:
+        return None
+    return "Latest from %s:\n" % src + "\n".join("- " + t for t in titles)
+
+def quote_lookup(_):
+    d = web_json("https://zenquotes.io/api/random")
+    return '"%s" - %s\n(Quotes by ZenQuotes.io)' % (d[0]["q"], d[0]["a"])
+
+def price_lookup(coin):
+    cid = COINS.get(coin.lower().strip())
+    if not cid:
+        return "I know these coins: " + ", ".join(sorted(COINS))
+    d = web_json("https://api.coingecko.com/api/v3/simple/price?ids=%s&vs_currencies=usd,vnd"
+                 "&include_24hr_change=true" % cid)[cid]
+    return "%s: $%s (%s VND), 24h %+.1f%%\n(Data: CoinGecko)" % (
+        cid, "{:,.2f}".format(d["usd"]), "{:,.0f}".format(d["vnd"]), d.get("usd_24h_change", 0))
+
+def aqi_text(lat, lon, name):
+    d = web_json("https://air-quality-api.open-meteo.com/v1/air-quality?latitude=%s&longitude=%s"
+                 "&current=us_aqi,pm2_5" % (lat, lon))["current"]
+    a = d["us_aqi"]
+    lvl = ("Good" if a <= 50 else "Moderate" if a <= 100 else "Unhealthy for sensitive groups" if a <= 150
+           else "Unhealthy" if a <= 200 else "Very unhealthy" if a <= 300 else "Hazardous")
+    return "%s: AQI %s (%s), PM2.5 %s ug/m3\n(Data: Open-Meteo)" % (name, a, lvl, d["pm2_5"])
+
+def aqi_lookup(city):
+    if not city:
+        return aqi_text(WEATHER_LAT, WEATHER_LON, WEATHER_NAME)
+    g = web_json("https://geocoding-api.open-meteo.com/v1/search?name=%s&count=1" % urlenc(city))
+    res = g.get("results")
+    if not res:
+        return None
+    r = res[0]
+    return aqi_text(r["latitude"], r["longitude"], "%s, %s" % (r["name"], r.get("country", "")))
+
 def web_answer(kind, arg):
     key = kind + ":" + arg.lower()
     if key in web_cache:
         return web_cache[key]
     try:
         fn = {"wiki": wiki_lookup, "search": search_lookup, "define": define_lookup,
-              "city": weather_city, "money": currency_lookup}[kind]
+              "city": weather_city, "money": currency_lookup, "news": news_lookup,
+              "quote": quote_lookup, "price": price_lookup, "aqi": aqi_lookup}[kind]
         out = fn(arg)
     except OSError as e:
         return "I can't reach the internet right now (%s)." % e
@@ -1517,6 +1602,26 @@ def looks_money(t):
 
 def web_intent(t, raw):
     """Return an answer if t is a web request, else None."""
+    tt = t.strip("? !.")
+    if tt in ("news", "headlines", "latest news", "tin tuc", "news vietnam"):
+        return web_answer("news", "vn")
+    if tt in ("world news", "news world", "bbc", "bbc news"):
+        return web_answer("news", "world")
+    if tt in ("quote", "quote of the day", "inspire me", "motivation"):
+        return web_answer("quote", "x")
+    if tt in ("air quality", "aqi", "pollution", "how is the air"):
+        return web_answer("aqi", "")
+    for pre in ("air quality in ", "aqi in ", "aqi "):
+        if t.startswith(pre):
+            return web_answer("aqi", raw[len(pre):].strip())
+    for pre in ("price of ", "price ", "how much is "):
+        if t.startswith(pre) and raw[len(pre):].strip().lower() in COINS:
+            return web_answer("price", raw[len(pre):].strip())
+    parts = tt.split()
+    if len(parts) == 2 and parts[1] in ("price", "usd") and parts[0] in COINS:
+        return web_answer("price", parts[0])
+    if tt in COINS:
+        return web_answer("price", tt)
     for pre in ("wikipedia ", "wiki "):
         if t.startswith(pre):
             return web_answer("wiki", raw[len(pre):].strip())
@@ -1613,7 +1718,9 @@ def assist(text):
         return "Added task: " + item
     if t.startswith(("wiki", "search", "google", "look up", "lookup", "find out", "define", "meaning of",
                      "definition of", "weather", "what's the weather", "whats the weather", "how's the weather",
-                     "convert", "exchange")) or (" to " in t and any(ch.isdigit() for ch in t) and len(t) < 40):
+                     "convert", "exchange", "news", "headlines", "world news", "bbc", "quote", "inspire",
+                     "air quality", "aqi", "pollution", "how is the air", "price", "bitcoin", "btc", "eth",
+                     "ethereum", "doge", "sol", "bnb", "xrp", "ada", "ton", "tin tuc", "motivation")) or (" to " in t and any(ch.isdigit() for ch in t) and len(t) < 40):
         r = web_intent(t, text.strip())
         if r is not None:
             return r
@@ -1668,7 +1775,8 @@ def assist(text):
                 "- add task buy milk  /  my tasks\n- note remember the wifi code\n- open weather\n"
                 "- flip a coin / roll a dice / tell me a joke\n"
                 "Online (direct to free web APIs):\n- wiki Ho Chi Minh City\n- search quantum computing\n"
-                "- weather in Hanoi  /  weather\n- define serendipity\n- 100 usd to vnd\n- who is Ada Lovelace")
+                "- weather in Hanoi  /  weather\n- define serendipity\n- 100 usd to vnd\n- who is Ada Lovelace\n"
+                "- news  /  world news  /  quote\n- air quality  /  aqi in Hanoi\n- bitcoin  /  price of eth")
     r = web_intent(t, text.strip())
     if r is not None:
         return r
