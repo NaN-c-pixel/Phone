@@ -302,6 +302,7 @@ def page_home():
 
     apps = (
         app("📝", "Notes", "/notes", "yellow") +
+        app("🤖", "Assistant", "/assistant", "purple") +
         app("☀️", "Weather", "/weather", "teal") +
         app("👤", "Contacts", "/contacts", "green") +
         app("📅", "Calendar", "/calendar", "pink") +
@@ -1310,6 +1311,19 @@ JS_APPS = {"/calendar": ("Calendar", CAL_HTML), "/convert": ("Converter", CONV_H
            "/world": ("World clock", WORLD_HTML)}
 
 def route_more(client, method, path, body):
+    if path == "/assistant":
+        respond(client, page_assistant())
+        return True
+    if path == "/api/ask":
+        if method != "POST":
+            respond(client, "POST only", "405 Method Not Allowed", "text/plain")
+        else:
+            try:
+                ans = assist(form_value(body, "q"))
+            except Exception as e:
+                ans = "Oops: " + repr(e)
+            respond(client, ans, content_type="text/plain; charset=utf-8")
+        return True
     if path in JS_APPS:
         title, html = JS_APPS[path]
         respond(client, page(title, html))
@@ -1344,6 +1358,141 @@ def route_more(client, method, path, body):
         respond(client, page_nettools(result))
         return True
     return False
+
+
+# -------------------- ASSISTANT (tiny, offline) ---------------
+
+OPEN_MAP = (("note", "/notes", "Notes"), ("task", "/todo", "Tasks"), ("todo", "/todo", "Tasks"),
+            ("file", "/files", "Files"), ("timer", "/timer", "Timer"), ("stopwatch", "/timer", "Timer"),
+            ("monitor", "/monitor", "Monitor"), ("gpio", "/gpio", "GPIO"), ("terminal", "/terminal", "Terminal"),
+            ("kali", "/kali", "Kali"), ("weather", "/weather", "Weather"), ("contact", "/contacts", "Contacts"),
+            ("calendar", "/calendar", "Calendar"), ("convert", "/convert", "Converter"),
+            ("snake", "/snake", "Snake"), ("game", "/snake", "Snake"), ("password", "/passgen", "Passwords"),
+            ("world", "/world", "World clock"), ("net", "/nettools", "Net Tools"),
+            ("wifi", "/wifi", "Wi-Fi"), ("bluetooth", "/bluetooth", "Bluetooth"),
+            ("calculator", "/calc", "Calculator"), ("setting", "/system", "Settings"))
+
+JOKES = ("Why do programmers prefer dark mode? Because light attracts bugs.",
+         "There are 10 kinds of people: those who know binary and those who don't.",
+         "A microcontroller walks into a bar. The bartender says: you look tense. It says: I just need a reset.",
+         "I would tell you a UDP joke, but you might not get it.")
+
+def _has(t, *words):
+    for w in words:
+        if w in t:
+            return True
+    return False
+
+def assist(text):
+    import random
+    t = text.lower().strip()
+    if not t:
+        return ""
+    gc.collect()
+    # math: "what is 12*7", "calculate (3+4)/2"
+    expr = t
+    for w in ("what is", "what's", "whats", "calculate", "calc", "compute", "="):
+        expr = expr.replace(w, " ")
+    expr = expr.replace("x", "*").replace("times", "*").replace("plus", "+").replace("minus", "-")
+    expr = expr.replace("divided by", "/").replace("^", "**").strip().rstrip("?")
+    if expr and all(ch in "0123456789+-*/(). %" for ch in expr) and any(ch.isdigit() for ch in expr):
+        try:
+            r = eval(expr)
+            return "%s = %s" % (expr.strip(), r)
+        except Exception:
+            return "I couldn't work that out."
+    if t.startswith(("open ", "go to ", "launch ", "start ", "show me ")) or t.startswith("open"):
+        for key, link, name in OPEN_MAP:
+            if key in t:
+                return "@%s|Opening %s" % (link, name)
+        return "I don't know that app. Try: open notes, open weather, open terminal..."
+    if t.startswith(("add task", "task ", "todo ", "remind me to ", "add todo")):
+        for pre in ("add task", "add todo", "remind me to", "task", "todo"):
+            if t.startswith(pre):
+                item = text.strip()[len(pre):].strip(" :-")
+                break
+        item = item[:100]
+        if not item:
+            return "What should the task say? Example: add task buy milk"
+        items = todo_load()
+        if len(items) >= 50:
+            return "Your task list is full (50)."
+        items.append([False, item])
+        todo_save(items)
+        return "Added task: " + item
+    if _has(t, "my tasks", "how many tasks", "list tasks", "what do i have to do"):
+        items = todo_load()
+        left = [x[1] for x in items if not x[0]]
+        if not left:
+            return "No open tasks."
+        return "%d open: %s" % (len(left), "; ".join(left[:8]))
+    if t.startswith(("note ", "write down ")):
+        item = text.strip().split(" ", 1)[1].strip()[:200]
+        with open("assistant_notes.txt", "a") as f:
+            f.write(item + "\n")
+        return "Saved to assistant_notes.txt"
+    if _has(t, "uptime", "how long"):
+        sec = time.ticks_ms() // 1000
+        return "Up for %dh %dm %ds" % (sec // 3600, sec % 3600 // 60, sec % 60)
+    if _has(t, "time", "what day", "date", "today"):
+        if SYNCED:
+            n = time.localtime(time.time() + TZ_HOURS * 3600)
+            days = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+            return "%s %04d-%02d-%02d, %02d:%02d" % (days[n[6]], n[0], n[1], n[2], n[3], n[4])
+        return "My clock isn't synced yet (no internet at boot)."
+    if _has(t, "ram", "memory"):
+        return "%d KB free, %d KB used" % (gc.mem_free() // 1024, gc.mem_alloc() // 1024)
+    if _has(t, "temperature", "how hot", "temp"):
+        v = temp_c()
+        return "Chip temperature: " + ("unknown" if v is None else "%s C" % v)
+    if _has(t, "ip address", "my ip", "address"):
+        return "I'm at " + wlan.ifconfig()[0]
+    if _has(t, "wifi", "signal", "network"):
+        return "%s, signal %s dBm" % (SSID, wlan.status("rssi"))
+    if _has(t, "storage", "disk", "space", "flash"):
+        v = os.statvfs("/")
+        return "%d MB free of %d MB" % (v[0] * v[3] // 1048576, v[0] * v[2] // 1048576)
+    if _has(t, "coin", "flip"):
+        return random.choice(("Heads", "Tails"))
+    if _has(t, "dice", "roll"):
+        return "You rolled a %d" % random.randint(1, 6)
+    if _has(t, "random number", "pick a number"):
+        return "Your number: %d" % random.randint(1, 100)
+    if _has(t, "joke", "funny"):
+        return random.choice(JOKES)
+    if _has(t, "thank"):
+        return "Any time!"
+    if _has(t, "who are you", "your name", "what are you"):
+        return "I'm a tiny offline assistant on an ESP32-S3. No cloud, no AI model, just a few rules."
+    if t in ("hi", "hello", "hey", "yo") or t.startswith(("hi ", "hello", "hey ")):
+        return "Hi! Ask me for the time, RAM, temperature, a calculation, or say: open notes."
+    if _has(t, "help", "what can you do", "commands"):
+        return ("Try:\n- what time is it\n- 12*7  /  what is (3+4)/2\n- how much ram / temperature / ip\n"
+                "- add task buy milk  /  my tasks\n- note remember the wifi code\n- open weather\n"
+                "- flip a coin / roll a dice / tell me a joke")
+    return "I don't understand that yet. Type help to see what I can do."
+
+def page_assistant():
+    content = """
+<h1>Assistant</h1><div class="sub">Tiny, offline, private. Type <b>help</b>.</div>
+<div class="card"><div id="m" style="min-height:200px;max-height:55vh;overflow:auto"></div>
+<div style="display:flex;gap:8px"><input id="q" placeholder="Ask me something..." autocomplete="off" maxlength="200">
+<button onclick="go()">Send</button></div></div>
+<script>
+var m=document.getElementById('m'),q=document.getElementById('q');
+function bub(t,me){var d=document.createElement('div');d.style.cssText='margin:6px 0;padding:9px 12px;border-radius:16px;white-space:pre-wrap;max-width:88%;'+
+ (me?'background:#087fff;color:#fff;margin-left:auto':'background:#eef0f5');
+ if(t.charAt(0)=='@'){var p=t.slice(1).split('|'),a=document.createElement('a');a.href=p[0];a.textContent=p[1]+' →';d.appendChild(a);
+  setTimeout(function(){location.href=p[0];},900);}
+ else d.textContent=t;m.appendChild(d);m.scrollTop=m.scrollHeight;}
+function go(){var t=q.value.trim();if(!t)return;q.value='';bub(t,true);
+ fetch('/api/ask',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'q='+encodeURIComponent(t)})
+ .then(function(r){return r.text()}).then(function(x){bub(x,false);}).catch(function(){bub('(board busy, try again)',false);});}
+q.addEventListener('keydown',function(e){if(e.key=='Enter')go();});
+bub('Hi! I can tell you the time, RAM, temperature, do maths, add tasks and open apps. Type help.',false);
+</script>
+"""
+    return page("Assistant", content)
 
 # -------------------- HTTP SERVER ----------------------------
 
