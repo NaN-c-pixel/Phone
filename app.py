@@ -12,6 +12,7 @@ import os
 import gc
 import machine
 import sys
+import json
 
 # Optional feature modules fail closed so a missing module won't stop boot.
 try:
