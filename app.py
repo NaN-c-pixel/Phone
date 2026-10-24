@@ -88,6 +88,18 @@ h3 { font-size:16px; margin:23px 0 10px; }
  letter-spacing:.5px; text-transform:uppercase; margin:25px 2px 12px;
 }
 .grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:19px 13px; }
+.app-pages {
+ display:flex; width:100%; overflow-x:auto; overflow-y:hidden;
+ scroll-snap-type:x mandatory; scroll-behavior:smooth;
+ -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain;
+ scrollbar-width:none; touch-action:pan-x pan-y;
+}
+.app-pages::-webkit-scrollbar { display:none; }
+.app-page { flex:0 0 100%; min-width:100%; scroll-snap-align:start; scroll-snap-stop:always; }
+.app-page .grid { grid-template-rows:repeat(4,auto); align-content:start; min-height:280px; }
+.page-dots { display:flex; justify-content:center; align-items:center; gap:7px; margin:18px 0 8px; }
+.page-dot { width:7px; height:7px; border-radius:50%; background:#c7c7d0; transition:all .18s ease; }
+.page-dot.active { width:19px; border-radius:5px; background:var(--blue); }
 .app { text-decoration:none; color:var(--ink); text-align:center; min-width:0; }
 .icon {
  aspect-ratio:1; border-radius:23%; display:grid; place-items:center;
@@ -311,32 +323,42 @@ def page_home():
         clock = "--:--"
         date = "Time not synced (no internet?)"
 
-    apps = (
-        app("📝", "Notes", "/notes", "yellow") +
-        app("🤖", "Assistant", "/assistant", "purple") +
-        app("🌐", "Web Apps", "/social", "blue") +
-        app("💹", "Bank", "/bank", "green") +
-        app("☀️", "Weather", "/weather", "teal") +
-        app("👤", "Contacts", "/contacts", "green") +
-        app("📅", "Calendar", "/calendar", "pink") +
-        app("⚖️", "Convert", "/convert", "orange") +
-        app("🐍", "Snake", "/snake", "green") +
-        app("🔑", "Passwords", "/passgen", "purple") +
-        app("🌍", "World", "/world", "blue") +
-        app("🛜", "Net Tools", "/nettools", "dark") +
-        app("✅", "Tasks", "/todo", "orange") +
-        app("📁", "Files", "/files", "blue") +
-        app("⏱", "Timer", "/timer", "teal") +
-        app("📈", "Monitor", "/monitor", "green") +
-        app("🔌", "GPIO", "/gpio", "purple") +
-        app("📶", "Wi-Fi", "/wifi", "green") +
-        app("ᛒ", "Bluetooth", "/bluetooth", "purple") +
-        app("⌨", "Terminal", "/terminal", "dark") +
-        app("🐉", "Kali", "/kali", "blue") +
-        app("🧮", "Calculator", "/calc", "orange") +
-        app("⚙️", "Settings", "/system", "dark") +
+    app_items = (
+        app("📝", "Notes", "/notes", "yellow"),
+        app("🤖", "Assistant", "/assistant", "purple"),
+        app("🌐", "Web Apps", "/social", "blue"),
+        app("💹", "Bank", "/bank", "green"),
+        app("☀️", "Weather", "/weather", "teal"),
+        app("👤", "Contacts", "/contacts", "green"),
+        app("📅", "Calendar", "/calendar", "pink"),
+        app("⚖️", "Convert", "/convert", "orange"),
+        app("🐍", "Snake", "/snake", "green"),
+        app("🔑", "Passwords", "/passgen", "purple"),
+        app("🌍", "World", "/world", "blue"),
+        app("🛜", "Net Tools", "/nettools", "dark"),
+        app("✅", "Tasks", "/todo", "orange"),
+        app("📁", "Files", "/files", "blue"),
+        app("⏱", "Timer", "/timer", "teal"),
+        app("📈", "Monitor", "/monitor", "green"),
+        app("🔌", "GPIO", "/gpio", "purple"),
+        app("📶", "Wi-Fi", "/wifi", "green"),
+        app("ᛒ", "Bluetooth", "/bluetooth", "purple"),
+        app("⌨", "Terminal", "/terminal", "dark"),
+        app("🐉", "Kali", "/kali", "blue"),
+        app("🧮", "Calculator", "/calc", "orange"),
+        app("⚙️", "Settings", "/system", "dark"),
         app("🔄", "Reboot", "/reboot", "pink")
     )
+
+    app_pages = ""
+    page_dots = ""
+    page_count = (len(app_items) + 11) // 12
+    for page_index in range(page_count):
+        first = page_index * 12
+        page_apps = "".join(app_items[first:first + 12])
+        app_pages += '<section class="app-page"><div class="grid">' + page_apps + '</div></section>'
+        active = " active" if page_index == 0 else ""
+        page_dots += '<span class="page-dot' + active + '"></span>'
 
     content = """
 <div class="hero">
@@ -346,7 +368,25 @@ def page_home():
 <h1>Applications</h1>
 <div class="sub">Your pocket-sized ESP32 computer.</div>
 </div>
-<div class="grid">""" + apps + """</div>
+<div class="app-pages" id="appPages">""" + app_pages + """</div>
+<div class="page-dots" id="pageDots">""" + page_dots + """</div>
+<script>
+(function(){
+ var strip=document.getElementById("appPages");
+ var dots=document.getElementById("pageDots");
+ if(!strip||!dots)return;
+ var items=dots.children;
+ var update=function(){
+  var page=Math.round(strip.scrollLeft/(strip.clientWidth||1));
+  for(var i=0;i<items.length;i++){
+   if(i===page)items[i].classList.add("active");
+   else items[i].classList.remove("active");
+  }
+ };
+ strip.addEventListener("scroll",update);
+ window.addEventListener("resize",update);
+})();
+</script>
 <div class="section-title">Device</div>
 """ + card("HungsOS Pocket Edition",
     row("Hardware", "ESP32-S3") +
