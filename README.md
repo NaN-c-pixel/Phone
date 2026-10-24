@@ -13,6 +13,7 @@ home screen over Wi-Fi; open it from any phone or PC browser on the same network
 - **Kali** (opens a *real* Kali Linux shell running on your PC/VM/Pi, see below)
 - **Bank** (shows the CafeF live stock board, https://liveboard.cafef.vn/)
 - **Assistant** (local logic on the board plus direct web lookups, no cloud LLM and no API key: `wiki`, `search`, `weather in <city>`, `define`, `100 usd to vnd`, plus time/RAM/maths/tasks/open apps)
+- **Web Apps** (lightweight shortcuts to official YouTube, TikTok, Instagram, Facebook, X, GitHub, SoundCloud and Wikipedia websites; requires internet)
 - **Weather** (live, set your city with `WEATHER_LAT/LON/NAME` in `wifi_config.py`), **Contacts**, **Calendar**
 - **Convert** (units), **Snake**, **Passwords** (generator), **World** clock, **Net Tools** (DNS, port check, public IP)
 - **Wi-Fi**, **Bluetooth** scanner, **Calculator**, **Settings**, **Reboot**
