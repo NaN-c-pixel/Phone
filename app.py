@@ -596,6 +596,10 @@ def page_calc():
 .calc-table{overflow-x:auto;color:#17211c;background:#e7eee4;border-radius:7px;margin-top:8px}
 .calc-table table{width:100%;border-collapse:collapse;font-family:monospace;font-size:12px}
 .calc-table th,.calc-table td{padding:6px;text-align:right;border-bottom:1px solid #bac5b8}
+#calc-plot3d{display:block;width:100%;height:auto;background:#e7eee4;border:2px solid #111918;border-radius:8px}
+#cas-result{font-size:16px;overflow-wrap:anywhere}
+#prog-source{resize:vertical}
+
 
 @media(max-width:390px){.calc-shell{padding:9px;border-radius:17px}.calc-keygrid{gap:5px}.calc-keygrid button{height:39px;font-size:12px}.calc-result{font-size:23px}}
 </style>
@@ -611,7 +615,10 @@ def page_calc():
   <div class="calc-tabs">
     <button id="tab-basic" class="active" onclick="calcMode('basic')">Calculate</button>
     <button id="tab-science" onclick="calcMode('science')">Scientific</button>
-    <button id="tab-graph" onclick="calcMode('graph')">Graph</button>
+    <button id="tab-graph" onclick="calcMode('graph')">2D Graph</button>
+    <button id="tab-3d" onclick="calcMode('3d')">3D Plot</button>
+    <button id="tab-cas" onclick="calcMode('cas')">CAS</button>
+    <button id="tab-code" onclick="calcMode('code')">Program</button>
     <button id="tab-memory" onclick="calcMode('memory')">Memory</button>
   </div>
   <section id="calc-graph-panel" style="display:none">
@@ -644,6 +651,48 @@ def page_calc():
       <button class="fn" onclick="calcMakeTable()">Table</button>
     </div>
     <div id="calc-table" class="calc-table"></div>
+  </section>
+  <section id="calc-3d-panel" style="display:none">
+    <div class="calc-graph-tools">
+      <label>z = f(x,y) <input id="graph-3d-fn" value="sin(sqrt(x^2+y^2))" autocapitalize="off"></label>
+      <button class="eq" onclick="calcPlot3D()">Render 3D</button>
+      <div class="calc-graph-range">
+        <label>Range min <input id="graph-3d-min" type="number" value="-4"></label>
+        <label>Range max <input id="graph-3d-max" type="number" value="4"></label>
+      </div>
+    </div>
+    <canvas id="calc-plot3d" width="520" height="320" aria-label="3D surface graph"></canvas>
+    <div class="calc-graph-actions">
+      <button class="fn" onclick="calc3DPreset('sin(sqrt(x^2+y^2))')">Ripple</button>
+      <button class="fn" onclick="calc3DPreset('x*y')">Saddle</button>
+      <button class="fn" onclick="calc3DPreset('cos(x)*sin(y)')">Wave</button>
+      <button class="fn" onclick="calc3DPreset('x^2-y^2')">Saddle 2</button>
+    </div>
+    <div id="calc-3d-status" class="calc-foot">Surface plots are projected onto a 2D canvas.</div>
+  </section>
+  <section id="calc-cas-panel" style="display:none">
+    <div class="calc-graph-tools">
+      <label>Expression in x <input id="cas-expression" value="x^3+2*x^2+3*x+1"></label>
+      <label>Operation <select id="cas-operation"><option value="differentiate">Differentiate d/dx</option><option value="integrate">Integrate ∫ dx</option><option value="simplify">Simplify algebra</option><option value="factor">Factor common terms</option></select></label>
+      <button class="eq" onclick="calcCAS()">Solve symbolically</button>
+    </div>
+    <div class="calc-screen"><div class="calc-mode">CAS RESULT</div><div id="cas-result" class="calc-expr">Ready</div></div>
+    <div class="calc-foot">Supports a safe subset of polynomial expressions and common functions; not a full computer algebra system.</div>
+  </section>
+  <section id="calc-code-panel" style="display:none">
+    <div class="calc-graph-tools">
+      <label>Program name <input id="prog-name" value="MyProgram"></label>
+      <label>Language <select id="prog-language"><option value="basic">Mini BASIC</option><option value="js">JavaScript (sandboxed)</option></select></label>
+    </div>
+    <textarea id="prog-source" rows="10" spellcheck="false" style="width:100%;box-sizing:border-box;background:#111a1f;color:#d8f3dc;border:1px solid #63747c;border-radius:8px;padding:10px;font-family:monospace;font-size:12px">10 LET A = 5
+20 LET B = A * A
+30 PRINT "A squared = "; B
+40 FOR I = 1 TO 5
+50 PRINT I
+60 NEXT I</textarea>
+    <div class="calc-graph-actions"><button class="eq" onclick="calcRunProgram()">▶ Run</button><button class="fn" onclick="calcProgramExample()">Example</button><button class="fn" onclick="document.getElementById('prog-source').value=''">Clear</button></div>
+    <pre id="prog-output" style="white-space:pre-wrap;overflow-wrap:anywhere;background:#10171b;color:#cde7d1;border-radius:8px;padding:10px;min-height:55px;font-size:12px">Program output appears here.</pre>
+    <div class="calc-foot">Mini BASIC supports LET, PRINT, FOR/NEXT, and END. Programs run in this page only.</div>
   </section>
   <section id="calc-memory-panel" style="display:none">
     <div class="calc-graph-tools">
@@ -681,7 +730,7 @@ function calcSign(){if(!calcExp)calcExp='-';else if(calcExp[0]==='-')calcExp=cal
 function calcSquare(){calcExp='('+calcExp+')^2';calcRender();}
 function calcFactorial(){try{let n=Number(calcExp);if(!Number.isInteger(n)||n<0||n>170)throw 0;let x=1;for(let i=2;i<=n;i++)x*=i;calcAnsValue=x;calcExp=String(x);calcResult.textContent=calcExp;calcRender();}catch(e){calcResult.textContent='Math ERROR';}}
 function calcAns(){calcAdd(String(calcAnsValue));}
-function calcMode(m){calcCurrentMode=m;['basic','science','graph','memory'].forEach(x=>document.getElementById('tab-'+x).classList.toggle('active',x===m));document.getElementById('calc-keys').style.display=(m==='graph'||m==='memory')?'none':'grid';document.getElementById('calc-graph-panel').style.display=m==='graph'?'block':'none';document.getElementById('calc-memory-panel').style.display=m==='memory'?'block':'none';if(m==='memory'){document.getElementById('calc-status').textContent='M = '+calcMem;document.getElementById('calc-mem-value').textContent=calcMem;}else if(m==='science'){document.getElementById('calc-status').textContent='Scientific functions';}else if(m==='graph'){document.getElementById('calc-status').textContent='Graphing mode';calcPlot();}else{document.getElementById('calc-status').textContent='HungsOS fx';}}
+function calcMode(m){calcCurrentMode=m;['basic','science','graph','3d','cas','code','memory'].forEach(x=>{let t=document.getElementById('tab-'+x);if(t)t.classList.toggle('active',x===m)});document.getElementById('calc-keys').style.display=(m==='graph'||m==='3d'||m==='cas'||m==='code'||m==='memory')?'none':'grid';['graph','3d','cas','code','memory'].forEach(x=>{let p=document.getElementById('calc-'+x+'-panel');if(p)p.style.display=m===x?'block':'none'});if(m==='memory'){document.getElementById('calc-status').textContent='M = '+calcMem;document.getElementById('calc-mem-value').textContent=calcMem;}else if(m==='science'){document.getElementById('calc-status').textContent='Scientific functions';}else if(m==='graph'){document.getElementById('calc-status').textContent='2D graph mode';calcPlot();}else if(m==='3d'){document.getElementById('calc-status').textContent='3D surface mode';calcPlot3D();}else if(m==='cas'){document.getElementById('calc-status').textContent='Symbolic algebra';}else if(m==='code'){document.getElementById('calc-status').textContent='Programming environment';}else{document.getElementById('calc-status').textContent='HungsOS fx';}}
 function calcEquals(){try{let e=calcExp.replace(/\^/g,'**').replace(/(\d+(?:\.\d+)?)%/g,'($1/100)');if(!/^[0-9+\-*/().\sA-Za-z_]+$/.test(e)||/(?:window|document|Function|eval|constructor|prototype)/i.test(e))throw 0;e=e.replace(/Math\.sin\(([^()]*)\)/g,(m,x)=>'Math.sin('+((calcAngleMode==='DEG')?'('+x+'*Math.PI/180)':x)+')').replace(/Math\.cos\(([^()]*)\)/g,(m,x)=>'Math.cos('+((calcAngleMode==='DEG')?'('+x+'*Math.PI/180)':x)+')').replace(/Math\.tan\(([^()]*)\)/g,(m,x)=>'Math.tan('+((calcAngleMode==='DEG')?'('+x+'*Math.PI/180)':x)+')');let result=Function('"use strict";return ('+e+')')();if(!Number.isFinite(result))throw 0;calcAnsValue=result;calcMem=result;calcExp=String(Number(result.toPrecision(10)));calcResult.textContent=calcExp;document.getElementById('calc-status').textContent='Answer saved';}catch(err){calcResult.textContent='Math ERROR';document.getElementById('calc-status').textContent='Check expression';}calcRender();}
 function calcMemAdd(){calcMem+=Number(calcAnsValue)||0;calcMode('memory');}
 function calcMemSub(){calcMem-=Number(calcAnsValue)||0;calcMode('memory');}
@@ -692,6 +741,12 @@ function calcGraphValue(raw,x){let e=calcGraphExpression(raw).replace(/\bx\b/g,'
 function calcPlot(){let canvas=document.getElementById('calc-plot');if(!canvas)return;let ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height;let xmin=Number(document.getElementById('graph-xmin').value),xmax=Number(document.getElementById('graph-xmax').value),ymin=Number(document.getElementById('graph-ymin').value),ymax=Number(document.getElementById('graph-ymax').value),fn=document.getElementById('graph-fn').value;if(!(xmax>xmin&&ymax>ymin)){document.getElementById('calc-graph-status').textContent='Range error: max must exceed min.';return;}ctx.clearRect(0,0,w,h);ctx.fillStyle='#e7eee4';ctx.fillRect(0,0,w,h);ctx.strokeStyle='#c5d0c1';ctx.lineWidth=1;for(let i=0;i<=10;i++){let x=i*w/10,y=i*h/10;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}ctx.strokeStyle='#59675a';ctx.lineWidth=1.5;ctx.beginPath();if(xmin<=0&&xmax>=0){let px=(0-xmin)/(xmax-xmin)*w;ctx.moveTo(px,0);ctx.lineTo(px,h);}if(ymin<=0&&ymax>=0){let py=(ymax)/(ymax-ymin)*h;ctx.moveTo(0,py);ctx.lineTo(w,py);}ctx.stroke();try{calcGraphExpression(fn);ctx.strokeStyle='#e18c28';ctx.lineWidth=2.5;ctx.beginPath();let started=false,prevY=null;for(let i=0;i<w;i++){let x=xmin+i/w*(xmax-xmin),y=calcGraphValue(fn,x),py=(ymax-y)/(ymax-ymin)*h;if(!Number.isFinite(y)||py < -h*3||py>h*4|| (prevY!==null&&Math.abs(py-prevY)>h)){started=false;prevY=py;continue;}if(!started){ctx.moveTo(i,py);started=true;}else ctx.lineTo(i,py);prevY=py;}ctx.stroke();document.getElementById('calc-graph-status').textContent='Plotted y = '+fn+' · x ['+xmin+', '+xmax+']';}catch(e){document.getElementById('calc-graph-status').textContent='Function error: '+e.message;}}
 function calcGraphPreset(f){document.getElementById('graph-fn').value=f;calcPlot();}
 function calcMakeTable(){let start=Number(document.getElementById('table-start').value),step=Number(document.getElementById('table-step').value),fn=document.getElementById('graph-fn').value;if(!Number.isFinite(step)||step===0){document.getElementById('calc-table').textContent='Step must not be zero.';return;}let html='<table><thead><tr><th>x</th><th>f(x)</th></tr></thead><tbody>';for(let i=0;i<11;i++){let x=start+i*step,y;try{y=calcGraphValue(fn,x); }catch(e){y=NaN;}html+='<tr><td>'+x.toPrecision(6)+'</td><td>'+(Number.isFinite(y)?y.toPrecision(7):'undefined')+'</td></tr>';}document.getElementById('calc-table').innerHTML=html+'</tbody></table>';}
+function calc3DPreset(f){document.getElementById('graph-3d-fn').value=f;calcPlot3D();}
+function calcPlot3D(){let c=document.getElementById('calc-plot3d');if(!c)return;let ctx=c.getContext('2d'),w=c.width,h=c.height,lo=Number(document.getElementById('graph-3d-min').value),hi=Number(document.getElementById('graph-3d-max').value),fn=document.getElementById('graph-3d-fn').value;if(!(hi>lo)){document.getElementById('calc-3d-status').textContent='Range error';return;}ctx.fillStyle='#e7eee4';ctx.fillRect(0,0,w,h);try{calcGraphExpression(fn);let n=24,scale=19,project=(x,y,z)=>[w/2+(x-y)*scale,h*.57+(x+y)*scale*.34-z*scale*1.4];for(let k=0;k<2;k++){ctx.strokeStyle=k?'#c17a36':'#91a79a';ctx.lineWidth=1;for(let i=0;i<=n;i++){ctx.beginPath();let started=false;for(let j=0;j<=n;j++){let x=lo+(i/n)*(hi-lo),y=lo+(j/n)*(hi-lo),z;try{z=calcGraphValue(fn.replace(/\by\b/g,'__Y__').replace(/\bx\b/g,'('+x+')').replace(/__Y__/g,'('+y+')'),0);}catch(e){z=NaN;}if(!Number.isFinite(z)||Math.abs(z)>1000){started=false;continue;}let p=project(k?lo+(j/n)*(hi-lo):x,k?y:lo+(j/n)*(hi-lo),z);if(!started){ctx.moveTo(p[0],p[1]);started=true;}else ctx.lineTo(p[0],p[1]);}ctx.stroke();}}document.getElementById('calc-3d-status').textContent='Rendered z = '+fn+' · grid 24×24';}catch(e){document.getElementById('calc-3d-status').textContent='3D function error: '+e.message;}}
+function calcCAS(){let raw=document.getElementById('cas-expression').value.replace(/\s+/g,''),op=document.getElementById('cas-operation').value,out='';try{if(!/^[0-9x.+\-*/()^]+$/.test(raw))throw Error('Use a polynomial expression with x, numbers, + − * / ^ and parentheses.');if(op==='differentiate'){let terms=raw.match(/[+-]?[^+-]+/g)||[],res=[];for(let t of terms){let sign=t[0]==='-'?-1:1;if(t[0]==='-'||t[0]==='+')t=t.slice(1);let m=t.match(/^(?:(\d+(?:\.\d+)?)\*?)?x(?:\^(\d+))?$/);if(m){let a=(m[1]?Number(m[1]):1)*sign,n=m[2]?Number(m[2]):1;if(n)res.push((a*n<0?'-':'+')+Math.abs(a*n)+(n-1===0?'':'*x'+(n-1===1?'':'^'+(n-1))));}else if(/^\d+(?:\.\d+)?$/.test(t)){}else throw Error('Differentiation currently supports expanded polynomial terms such as x^3+2*x^2+3*x+1.');}out=res.join('').replace(/^\+/,'')||'0';}else if(op==='integrate'){let terms=raw.match(/[+-]?[^+-]+/g)||[],res=[];for(let t of terms){let sign=t[0]==='-'?-1:1;if(t[0]==='-'||t[0]==='+')t=t.slice(1);let m=t.match(/^(?:(\d+(?:\.\d+)?)\*?)?x(?:\^(\d+))?$/);if(m){let a=(m[1]?Number(m[1]):1)*sign,n=m[2]?Number(m[2]):1;res.push((a/(n+1)<0?'-':'+')+Math.abs(a/(n+1))+'*x^'+(n+1));}else if(/^\d+(?:\.\d+)?$/.test(t))res.push((sign<0?'-':'+')+Math.abs(Number(t))+'*x');else throw Error('Integration currently supports expanded polynomials.');}out=(res.join('').replace(/^\+/,'')||'0')+' + C';}else if(op==='simplify'){out=raw.replace(/\*1\b/g,'').replace(/\b1\*/g,'').replace(/\+0\b/g,'').replace(/-0\b/g,'').replace(/\s+/g,'')||'0';}else{let m=raw.match(/^([+-]?\d+(?:\.\d+)?)\*?x([+-]\d+(?:\.\d+)?)$/);out=m?'('+m[1]+'*x'+m[2]+')':raw+' (no common factor detected)';}document.getElementById('cas-result').textContent=out;}catch(e){document.getElementById('cas-result').textContent='CAS limitation: '+e.message;}}
+function calcProgramExample(){document.getElementById('prog-language').value='basic';document.getElementById('prog-source').value='10 LET A = 5\n20 LET B = A * A\n30 PRINT "A squared = "; B\n40 FOR I = 1 TO 5\n50 PRINT I\n60 NEXT I\n70 END';}
+function calcRunProgram(){let src=document.getElementById('prog-source').value,lang=document.getElementById('prog-language').value,lines=src.split(/\n/),vars={},out=[],steps=0;if(lang==='js'){document.getElementById('prog-output').textContent='JavaScript mode is not enabled yet; use Mini BASIC for safe local programs.';return;}let prog=[];for(let line of lines){line=line.trim();if(!line)continue;let m=line.match(/^(\d+)\s+(.*)$/);prog.push({n:m?Number(m[1]):prog.length+1,code:m?m[2]:line});}let pc=0,loops=[];function val(e){e=e.trim();let str=e.match(/^"(.*)"$/);if(str)return str[1];e=e.replace(/[A-Za-z_]\w*/g,k=>Object.prototype.hasOwnProperty.call(vars,k)?String(vars[k]):k);if(!/^[0-9+\-*/().%\s]+$/.test(e))throw Error('Unknown variable or expression: '+e);return Function('"use strict";return ('+e+')')();}try{while(pc<prog.length&&steps++<1000){let code=prog[pc].code,m;if(/^END$/i.test(code))break;if((m=code.match(/^LET\s+([A-Za-z_]\w*)\s*=\s*(.+)$/i))){vars[m[1]]=val(m[2]);}else if((m=code.match(/^PRINT\s+(.+)$/i))){let chunks=m[1].split(';').map(x=>val(x));out.push(chunks.join(''));}else if((m=code.match(/^FOR\s+([A-Za-z_]\w*)\s*=\s*(.+?)\s+TO\s+(.+)$/i))){let v=m[1],a=Number(val(m[2])),b=Number(val(m[3])),next=pc+1;vars[v]=a;let end=-1;for(let j=pc+1;j<prog.length;j++)if(/^NEXT\s*$/i.test(prog[j].code)){end=j;break;}if(end<0)throw Error('FOR has no NEXT');if(a>b){pc=end;}else loops.push({v,b,start:pc+1,end});}else if(/^NEXT\s*$/i.test(code)){let l=loops[loops.length-1];if(!l)throw Error('NEXT without FOR');vars[l.v]++;if(vars[l.v]<=l.b)pc=l.start-1;else loops.pop();}else throw Error('Unsupported line '+prog[pc].n+': '+code);pc++;}if(steps>=1000)throw Error('Step limit reached');document.getElementById('prog-output').textContent=out.join('\n')+'\n\nVariables: '+JSON.stringify(vars);}catch(e){document.getElementById('prog-output').textContent='Program error: '+e.message;}}
+
 
 </script>
 """
