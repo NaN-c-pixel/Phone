@@ -586,6 +586,17 @@ def page_calc():
 .calc-keygrid button.eq{background:#e5a54e;color:#20190f;box-shadow:0 3px 0 #ad712a}
 .calc-keygrid button.wide{grid-column:span 2}
 .calc-foot{font-size:10px;text-align:center;color:#aeb9bd;margin-top:12px;letter-spacing:.5px}
+.calc-graph-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin:8px 0;color:#dce6e8}
+.calc-graph-tools label{display:flex;flex-direction:column;gap:4px;flex:1;min-width:90px;font-size:11px}
+.calc-graph-tools input{box-sizing:border-box;width:100%;min-width:0;background:#cbd8c5;color:#17211c;border:2px solid #111918;border-radius:6px;padding:8px;font-family:monospace}
+.calc-graph-range{display:flex;gap:8px;width:100%}
+#calc-plot{display:block;width:100%;height:auto;background:#e7eee4;border:2px solid #111918;border-radius:8px;touch-action:pan-y}
+.calc-graph-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:8px}
+.calc-graph-actions button{padding:8px 2px;border-radius:7px;border:0}
+.calc-table{overflow-x:auto;color:#17211c;background:#e7eee4;border-radius:7px;margin-top:8px}
+.calc-table table{width:100%;border-collapse:collapse;font-family:monospace;font-size:12px}
+.calc-table th,.calc-table td{padding:6px;text-align:right;border-bottom:1px solid #bac5b8}
+
 @media(max-width:390px){.calc-shell{padding:9px;border-radius:17px}.calc-keygrid{gap:5px}.calc-keygrid button{height:39px;font-size:12px}.calc-result{font-size:23px}}
 </style>
 <h1>Calculator</h1>
@@ -600,8 +611,49 @@ def page_calc():
   <div class="calc-tabs">
     <button id="tab-basic" class="active" onclick="calcMode('basic')">Calculate</button>
     <button id="tab-science" onclick="calcMode('science')">Scientific</button>
+    <button id="tab-graph" onclick="calcMode('graph')">Graph</button>
     <button id="tab-memory" onclick="calcMode('memory')">Memory</button>
   </div>
+  <section id="calc-graph-panel" style="display:none">
+    <div class="calc-graph-tools">
+      <label>f(x) <input id="graph-fn" value="sin(x)" autocapitalize="off" autocomplete="off"></label>
+      <button class="eq" onclick="calcPlot()">Plot</button>
+      <div class="calc-graph-range">
+        <label>X min <input id="graph-xmin" type="number" value="-10"></label>
+        <label>X max <input id="graph-xmax" type="number" value="10"></label>
+      </div>
+      <div class="calc-graph-range">
+        <label>Y min <input id="graph-ymin" type="number" value="-5"></label>
+        <label>Y max <input id="graph-ymax" type="number" value="5"></label>
+      </div>
+    </div>
+    <canvas id="calc-plot" width="520" height="300" aria-label="Function graph"></canvas>
+    <div class="calc-graph-actions">
+      <button class="fn" onclick="calcGraphPreset('x^2')">x²</button>
+      <button class="fn" onclick="calcGraphPreset('sin(x)')">sin x</button>
+      <button class="fn" onclick="calcGraphPreset('cos(x)')">cos x</button>
+      <button class="fn" onclick="calcGraphPreset('1/x')">1/x</button>
+      <button class="fn" onclick="calcGraphPreset('sqrt(x)')">√x</button>
+      <button class="fn" onclick="calcGraphPreset('abs(x)')">|x|</button>
+      <button class="fn" onclick="calcGraphPreset('tan(x)')">tan x</button>
+    </div>
+    <div id="calc-graph-status" class="calc-foot">Enter a function of x, then tap Plot.</div>
+    <div class="calc-graph-tools">
+      <label>Table start <input id="table-start" type="number" value="-5"></label>
+      <label>Step <input id="table-step" type="number" value="1"></label>
+      <button class="fn" onclick="calcMakeTable()">Table</button>
+    </div>
+    <div id="calc-table" class="calc-table"></div>
+  </section>
+  <section id="calc-memory-panel" style="display:none">
+    <div class="calc-graph-tools">
+      <p>Memory register <strong id="calc-mem-value">0</strong></p>
+      <button class="fn" onclick="calcMemAdd()">M+</button>
+      <button class="fn" onclick="calcMemSub()">M−</button>
+      <button class="fn" onclick="calcMemRecall()">MR</button>
+      <button class="fn" onclick="calcMemClear()">MC</button>
+    </div>
+  </section>
   <div class="calc-keygrid" id="calc-keys">
     <button class="shift" onclick="calcShift()">SHIFT</button><button class="fn" onclick="calcAngle()">DRG</button><button class="fn" onclick="calcConst('Math.PI')">π</button><button class="fn" onclick="calcConst('Math.E')">e</button><button class="fn" onclick="calcClear()">AC</button>
     <button class="fn" onclick="calcWrap('Math.sin(',')')">sin</button><button class="fn" onclick="calcWrap('Math.cos(',')')">cos</button><button class="fn" onclick="calcWrap('Math.tan(',')')">tan</button><button class="fn" onclick="calcBack()">DEL</button><button class="op" onclick="calcAdd('/')">÷</button>
@@ -629,8 +681,18 @@ function calcSign(){if(!calcExp)calcExp='-';else if(calcExp[0]==='-')calcExp=cal
 function calcSquare(){calcExp='('+calcExp+')^2';calcRender();}
 function calcFactorial(){try{let n=Number(calcExp);if(!Number.isInteger(n)||n<0||n>170)throw 0;let x=1;for(let i=2;i<=n;i++)x*=i;calcAnsValue=x;calcExp=String(x);calcResult.textContent=calcExp;calcRender();}catch(e){calcResult.textContent='Math ERROR';}}
 function calcAns(){calcAdd(String(calcAnsValue));}
-function calcMode(m){calcCurrentMode=m;['basic','science','memory'].forEach(x=>document.getElementById('tab-'+x).classList.toggle('active',x===m));if(m==='memory'){document.getElementById('calc-status').textContent='M = '+calcMem;calcAdd(String(calcMem));}else if(m==='science'){document.getElementById('calc-status').textContent='Scientific functions';}else{document.getElementById('calc-status').textContent='HungsOS fx';}}
+function calcMode(m){calcCurrentMode=m;['basic','science','graph','memory'].forEach(x=>document.getElementById('tab-'+x).classList.toggle('active',x===m));document.getElementById('calc-keys').style.display=(m==='graph'||m==='memory')?'none':'grid';document.getElementById('calc-graph-panel').style.display=m==='graph'?'block':'none';document.getElementById('calc-memory-panel').style.display=m==='memory'?'block':'none';if(m==='memory'){document.getElementById('calc-status').textContent='M = '+calcMem;document.getElementById('calc-mem-value').textContent=calcMem;}else if(m==='science'){document.getElementById('calc-status').textContent='Scientific functions';}else if(m==='graph'){document.getElementById('calc-status').textContent='Graphing mode';calcPlot();}else{document.getElementById('calc-status').textContent='HungsOS fx';}}
 function calcEquals(){try{let e=calcExp.replace(/\^/g,'**').replace(/(\d+(?:\.\d+)?)%/g,'($1/100)');if(!/^[0-9+\-*/().\sA-Za-z_]+$/.test(e)||/(?:window|document|Function|eval|constructor|prototype)/i.test(e))throw 0;e=e.replace(/Math\.sin\(([^()]*)\)/g,(m,x)=>'Math.sin('+((calcAngleMode==='DEG')?'('+x+'*Math.PI/180)':x)+')').replace(/Math\.cos\(([^()]*)\)/g,(m,x)=>'Math.cos('+((calcAngleMode==='DEG')?'('+x+'*Math.PI/180)':x)+')').replace(/Math\.tan\(([^()]*)\)/g,(m,x)=>'Math.tan('+((calcAngleMode==='DEG')?'('+x+'*Math.PI/180)':x)+')');let result=Function('"use strict";return ('+e+')')();if(!Number.isFinite(result))throw 0;calcAnsValue=result;calcMem=result;calcExp=String(Number(result.toPrecision(10)));calcResult.textContent=calcExp;document.getElementById('calc-status').textContent='Answer saved';}catch(err){calcResult.textContent='Math ERROR';document.getElementById('calc-status').textContent='Check expression';}calcRender();}
+function calcMemAdd(){calcMem+=Number(calcAnsValue)||0;calcMode('memory');}
+function calcMemSub(){calcMem-=Number(calcAnsValue)||0;calcMode('memory');}
+function calcMemRecall(){calcExp+=String(calcMem);calcRender();calcResult.textContent=calcExp;}
+function calcMemClear(){calcMem=0;document.getElementById('calc-mem-value').textContent='0';calcRender();}
+function calcGraphExpression(raw){let e=raw.toLowerCase().replace(/\s+/g,'').replace(/π/g,'Math.PI').replace(/×/g,'*').replace(/÷/g,'/').replace(/\^/g,'**');e=e.replace(/\b(sin|cos|tan|asin|acos|atan|sqrt|abs|log|ln|exp)\(/g,(_,f)=>({'sin':'Math.sin(','cos':'Math.cos(','tan':'Math.tan(','asin':'Math.asin(','acos':'Math.acos(','atan':'Math.atan(','sqrt':'Math.sqrt(','abs':'Math.abs(','log':'Math.log10(','ln':'Math.log(','exp':'Math.exp('})[f]);e=e.replace(/\bpi\b/g,'Math.PI').replace(/\be\b/g,'Math.E');if(!/^[0-9x.+\-*/()%A-Za-z_]+$/.test(e)||/(?:window|document|Function|eval|constructor|prototype|import|return)/i.test(e))throw Error('Use x, numbers, and supported math functions only');return e;}
+function calcGraphValue(raw,x){let e=calcGraphExpression(raw).replace(/\bx\b/g,'('+x+')');let y=Function('"use strict";return ('+e+')')();return Number.isFinite(y)?y:NaN;}
+function calcPlot(){let canvas=document.getElementById('calc-plot');if(!canvas)return;let ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height;let xmin=Number(document.getElementById('graph-xmin').value),xmax=Number(document.getElementById('graph-xmax').value),ymin=Number(document.getElementById('graph-ymin').value),ymax=Number(document.getElementById('graph-ymax').value),fn=document.getElementById('graph-fn').value;if(!(xmax>xmin&&ymax>ymin)){document.getElementById('calc-graph-status').textContent='Range error: max must exceed min.';return;}ctx.clearRect(0,0,w,h);ctx.fillStyle='#e7eee4';ctx.fillRect(0,0,w,h);ctx.strokeStyle='#c5d0c1';ctx.lineWidth=1;for(let i=0;i<=10;i++){let x=i*w/10,y=i*h/10;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}ctx.strokeStyle='#59675a';ctx.lineWidth=1.5;ctx.beginPath();if(xmin<=0&&xmax>=0){let px=(0-xmin)/(xmax-xmin)*w;ctx.moveTo(px,0);ctx.lineTo(px,h);}if(ymin<=0&&ymax>=0){let py=(ymax)/(ymax-ymin)*h;ctx.moveTo(0,py);ctx.lineTo(w,py);}ctx.stroke();try{calcGraphExpression(fn);ctx.strokeStyle='#e18c28';ctx.lineWidth=2.5;ctx.beginPath();let started=false,prevY=null;for(let i=0;i<w;i++){let x=xmin+i/w*(xmax-xmin),y=calcGraphValue(fn,x),py=(ymax-y)/(ymax-ymin)*h;if(!Number.isFinite(y)||py < -h*3||py>h*4|| (prevY!==null&&Math.abs(py-prevY)>h)){started=false;prevY=py;continue;}if(!started){ctx.moveTo(i,py);started=true;}else ctx.lineTo(i,py);prevY=py;}ctx.stroke();document.getElementById('calc-graph-status').textContent='Plotted y = '+fn+' · x ['+xmin+', '+xmax+']';}catch(e){document.getElementById('calc-graph-status').textContent='Function error: '+e.message;}}
+function calcGraphPreset(f){document.getElementById('graph-fn').value=f;calcPlot();}
+function calcMakeTable(){let start=Number(document.getElementById('table-start').value),step=Number(document.getElementById('table-step').value),fn=document.getElementById('graph-fn').value;if(!Number.isFinite(step)||step===0){document.getElementById('calc-table').textContent='Step must not be zero.';return;}let html='<table><thead><tr><th>x</th><th>f(x)</th></tr></thead><tbody>';for(let i=0;i<11;i++){let x=start+i*step,y;try{y=calcGraphValue(fn,x); }catch(e){y=NaN;}html+='<tr><td>'+x.toPrecision(6)+'</td><td>'+(Number.isFinite(y)?y.toPrecision(7):'undefined')+'</td></tr>';}document.getElementById('calc-table').innerHTML=html+'</tbody></table>';}
+
 </script>
 """
     return page("Calculator", content)
