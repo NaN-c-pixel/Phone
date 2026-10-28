@@ -119,7 +119,7 @@ def init():
         spi_id = getattr(cfg, "SPI_ID", 2)
         baudrate = getattr(cfg, "BAUDRATE", 40000000)
         spi = SPI(spi_id, baudrate=baudrate, polarity=0, phase=0,
-                  sck=Pin(cfg.SCK), mosi=Pin(cfg.MOSI), miso=Pin(getattr(cfg, "MISO", cfg.SCK)))
+                  sck=Pin(cfg.SCK), mosi=Pin(cfg.MOSI), miso=(Pin(cfg.MISO) if isinstance(getattr(cfg, "MISO", None), int) else None))
         display = ILI9341(spi, cfg.CS, cfg.DC, cfg.RST,
                           getattr(cfg, "WIDTH", 240), getattr(cfg, "HEIGHT", 320),
                           getattr(cfg, "ROTATION", 0))
