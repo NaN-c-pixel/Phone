@@ -51,6 +51,21 @@ try:
 except ImportError:
     bluetooth = None
 
+# -------------------- OPTIONAL PHYSICAL TFT -----------------
+# Optional ILI9341 screen; browser UI continues to work without hardware config.
+try:
+    import tft_screen
+except Exception as _tft_import_error:
+    tft_screen = None
+    print("Physical TFT module unavailable:", repr(_tft_import_error))
+
+def tft_status(title, subtitle=""):
+    if tft_screen is not None:
+        try:
+            tft_screen.show_status(title, subtitle)
+        except Exception as _tft_error:
+            print("TFT status skipped:", repr(_tft_error))
+
 # -------------------- WIFI SETTINGS --------------------------
 
 try:
@@ -2483,9 +2498,14 @@ def serve():
 if SSID == "YOUR_WIFI_NAME":
     print("WARNING: copy wifi_config_example.py to wifi_config.py and fill it in.")
 
+tft_status("HungsOS", "Starting Wi-Fi...")
 IP = connect()
 if IP != "0.0.0.0":
+    tft_status("HungsOS", "Wi-Fi connected")
     sync_time()
+    tft_status("HungsOS", "Ready: " + IP)
+else:
+    tft_status("HungsOS", "Wi-Fi not connected")
 
 if IP != "0.0.0.0":
     serve()
