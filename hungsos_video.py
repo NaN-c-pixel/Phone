@@ -101,9 +101,10 @@ def play(path, framebuffer, show, loop=False, max_frames=None, show_tile=None):
                 record = _read_exact(f, 4)
                 delay_ms, tile_count = _u16(record, 0), _u16(record, 2)
                 for _ in range(tile_count):
-                    thdr = _read_exact(f, 7)
-                    x, y, w, h, codec = thdr[0], thdr[1], thdr[2], thdr[3], thdr[4]
-                    data_len = _u16(thdr, 5)
+                    thdr = _read_exact(f, 9)
+                    x, y = _u16(thdr, 0), _u16(thdr, 2)
+                    w, h, codec = thdr[4], thdr[5], thdr[6]
+                    data_len = _u16(thdr, 7)
                     if w < 1 or h < 1 or x + w > WIDTH or y + h > HEIGHT:
                         raise ValueError("Invalid tile position")
                     if w > 16 or h > 16 or data_len > 1024:
