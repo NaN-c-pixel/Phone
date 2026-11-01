@@ -116,7 +116,7 @@ def encode(input_path, output_path, fps=15, key_interval=30):
                     out.write(payload)
                 previous = current
                 frame_count += 1
-                raw_total += frame_bytes
+                raw_total += WIDTH * HEIGHT * 2
                 if frame_count % fps == 0:
                     print("Encoded %d frames..." % frame_count)
 
