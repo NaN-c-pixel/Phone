@@ -85,6 +85,23 @@ def show():
         spi.write(memoryview(chunk)[:n])
     tft_cs.value(1)
 
+def show_tile(x, y, w, h, tile):
+    # Fast partial ILI9341 update for HVID playback.
+    if x < 0 or y < 0 or x + w > WIDTH or y + h > HEIGHT:
+        return
+    cmd(0x2A, bytes((x >> 8, x & 255, (x+w-1) >> 8, (x+w-1) & 255)))
+    cmd(0x2B, bytes((y >> 8, y & 255, (y+h-1) >> 8, (y+h-1) & 255)))
+    cmd(0x2C)
+    swapped = bytearray(len(tile))
+    for i in range(0, len(tile), 2):
+        swapped[i] = tile[i+1]
+        swapped[i+1] = tile[i]
+    tft_cs.value(0)
+    dc.value(1)
+    spi.write(swapped)
+    tft_cs.value(1)
+
+
 def centered(text, y, color=WHITE):
     fb.text(text, max(0, (WIDTH-len(text)*8)//2), y, color)
 
