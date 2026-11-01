@@ -6,6 +6,7 @@
 
 from machine import Pin, SPI
 import framebuf, time, network, socket, os, gc
+from video_cast import CAST_PAGE, apply_packet
 
 WIDTH, HEIGHT = 320, 240
 STATIC_IP = "192.168.1.7"
@@ -230,6 +231,7 @@ input{width:100%;padding:14px;border:0;border-radius:12px;font-size:17px;margin:
 .keys{display:grid;grid-template-columns:repeat(7,1fr)}.keys button{padding:10px 2px;margin:2px;font-size:14px}
 small{color:#aab8ce}
 </style></head><body><main><h2>HungsOS PC <small>· Remote</small></h2>
+<p><a style="color:#7dd3fc" href="/cast">Open Video Cast</a></p>
 <div class="card"><b>Touchpad / mouse</b><div class="pad">
 <button onclick="send('up')">▲</button><button onclick="send('click')">●</button><button onclick="send('right')">▶</button>
 <button onclick="send('left')">◀</button><button onclick="send('down')">▼</button><button onclick="send('home')">⌂</button></div></div>
@@ -274,14 +276,47 @@ def server_loop(wlan):
         except OSError:
             continue
         try:
-            client.settimeout(2)
+            client.settimeout(4)
             req = client.recv(2048)
+            if not req:
+                client.close()
+                continue
+            header_end = req.find(b"\r\n\r\n")
+            while header_end < 0 and len(req) < 8192:
+                more = client.recv(1024)
+                if not more: break
+                req += more
+                header_end = req.find(b"\r\n\r\n")
+            if header_end < 0:
+                raise ValueError("HTTP headers incomplete")
+            header = req[:header_end]
+            body = req[header_end+4:]
+            method_path = header.split(b"\r\n", 1)[0].decode()
+            method, path, _ = method_path.split(" ", 2)
+            content_length = 0
+            for hline in header.split(b"\r\n")[1:]:
+                if hline.lower().startswith(b"content-length:"):
+                    content_length = int(hline.split(b":",1)[1].strip())
+            while len(body) < content_length:
+                more = client.recv(min(2048, content_length-len(body)))
+                if not more: break
+                body += more
+            if len(body) != content_length:
+                raise ValueError("HTTP body incomplete")
             if not req:
                 client.close()
                 continue
             line = req.split(b"\r\n", 1)[0].decode()
             path = line.split(" ")[1]
-            if path.startswith("/cmd"):
+            if method == "POST" and path.startswith("/video/frame"):
+                ok = apply_packet(body, buf, show)
+                response = b"OK" if ok else b"BAD PACKET"
+                status = b"200 OK" if ok else b"400 Bad Request"
+                client.send(b"HTTP/1.1 " + status + b"\r\nContent-Type:text/plain\r\nContent-Length:" + str(len(response)).encode() + b"\r\nConnection:close\r\n\r\n" + response)
+            elif method == "GET" and path.startswith("/cast"):
+                body_out = CAST_PAGE.encode()
+                client.send(b"HTTP/1.1 200 OK\r\nContent-Type:text/html\r\nContent-Length:" + str(len(body_out)).encode() + b"\r\nConnection:close\r\n\r\n" + body_out)
+            elif path.startswith("/cmd"):
                 q = query(path)
                 action = q.get("c", "")
                 if action in ("home", "settings", "files", "notepad", "games", "bin", "apps"):
