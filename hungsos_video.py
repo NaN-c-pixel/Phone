@@ -72,7 +72,7 @@ def _write_tile(framebuffer, x, y, w, h, tile):
         src += row_bytes
 
 
-def play(path, framebuffer, show, loop=False, max_frames=None):
+def play(path, framebuffer, show, loop=False, max_frames=None, show_tile=None):
     """Play HVID from path. Returns number of frames displayed.
 
     framebuffer must be a 320x240 RGB565 bytearray. show() sends it to ILI9341.
@@ -119,8 +119,12 @@ def play(path, framebuffer, show, loop=False, max_frames=None):
                     else:
                         raise ValueError("Unknown tile codec")
                     _write_tile(framebuffer, x, y, w, h, tile)
+                    if show_tile is not None and tile_count <= 40:
+                        show_tile(x, y, w, h, tile)
 
-                show()
+                if show_tile is None or tile_count > 40:
+                    if tile_count:
+                        show()
                 displayed += 1
                 frame_index += 1
                 if max_frames is not None and displayed >= max_frames:
