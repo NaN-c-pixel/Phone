@@ -26,9 +26,9 @@ The SD card must first be mounted at /sd by a driver/configuration matching the 
 With the HungsOS PC framebuffer and show() function already initialized:
 
     import hungsos_video
-    hungsos_video.play("/sd/movie.hvid", buf, show)
+    hungsos_video.play("/sd/movie.hvid", buf, show, show_tile=show_tile)
 
-The player reads one tile at a time, updates the existing framebuffer and sends each frame to the ILI9341. It does not load the whole movie into RAM or use the 16 MB flash for video storage.
+The player reads one tile at a time and updates the existing framebuffer. Sparse frames are sent as partial ILI9341 tile updates using show_tile; dense frames use one full-screen refresh. It does not load the whole movie into RAM or use the 16 MB flash for video storage.
 
 ## Format and limits
 
