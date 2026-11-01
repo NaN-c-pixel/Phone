@@ -12,7 +12,7 @@ import sys
 WIDTH, HEIGHT, TILE = 320, 240, 16
 HEADER = struct.Struct("<4sBHHBBI")
 FRAME = struct.Struct("<HH")
-TILE_HEADER = struct.Struct("<BBBBBH")
+TILE_HEADER = struct.Struct("<HHBBBH")
 
 
 def packbits(pixels):
