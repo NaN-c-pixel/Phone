@@ -38,6 +38,7 @@ def packbits(pixels):
                 run += 1
             if run >= 3:
                 break
+            run = min(run, 128 - (i - start))
             i += run
         n = i - start
         out.append(n - 1)
