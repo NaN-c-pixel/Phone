@@ -6,7 +6,7 @@ The video-playing branch adds offline playback alongside the browser-cast experi
 
 - tools/hvid_encode.py: PC-side encoder. Uses FFmpeg to decode common video formats.
 - hungsos_video.py: MicroPython player for the ESP32-S3.
-- .hvid: custom, silent, 320x240 RGB565 video container.
+- .hvid: custom, silent, 320x240 RGB565 video container. Tile headers store x/y as 16-bit values so tiles across the full 320-pixel width are supported.
 
 ## Encode on Windows
 
