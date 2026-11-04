@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Pocket PC</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="device">
+  <div id="topbar">
+    <button id="startBtn"><span class="flag"><i></i><i></i><i></i><i></i></span>Start</button>
+    <span id="appTitle"></span>
+    <span class="tray"><span id="sig">&#9650;</span><span id="clock">--:--</span></span>
+  </div>
+
+  <div id="content"></div>
+
+  <div id="startMenu" hidden></div>
+
+  <div id="bottombar">
+    <button id="softL"></button>
+    <span class="kbd">&#9638;</span>
+    <button id="softR"></button>
+  </div>
+
+  <div id="dialogWrap" hidden>
+    <div id="dialog">
+      <div class="dtitle" id="dTitle"></div>
+      <div class="dbody"><div id="dMsg"></div><input id="dInput" autocomplete="off"></div>
+      <div class="dbtns"><button id="dOk">OK</button><button id="dCancel">Cancel</button></div>
+    </div>
+  </div>
+</div>
+<script src="/app.js"></script>
+</body>
+</html>
