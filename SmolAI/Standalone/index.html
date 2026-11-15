@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#10131a">
+<meta name="description" content="SmolAI — private on-device AI chat.">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<title>SmolAI Standalone</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#10131a;color:#edf2f8}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at top,#1b2b3e,#10131a 55%);display:flex;justify-content:center}
+main{width:min(850px,100%);min-height:100vh;display:flex;flex-direction:column;padding:16px 14px max(12px,env(safe-area-inset-bottom))}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 2px 16px;border-bottom:1px solid #2b3545}
+.brand{display:flex;align-items:center;gap:10px}.logo{width:40px;height:40px;border-radius:13px;background:#244a70;display:grid;place-items:center;font-size:23px}
+h1{font-size:1.18rem;margin:0;letter-spacing:.06em}.sub{font-size:.76rem;color:#9eacc0;margin-top:3px}
+.status{font-size:.75rem;color:#aebdd0;border:1px solid #354256;padding:7px 10px;border-radius:999px;white-space:nowrap}
+.panel{background:#182230;border:1px solid #2c3a4e;border-radius:16px;padding:14px;margin:14px 0}
+.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+button{font:inherit;font-weight:650;border:1px solid #3c83c6;border-radius:12px;background:#28669f;color:white;padding:11px 14px;cursor:pointer}
+button.secondary{background:#202c3b;border-color:#40516a;color:#e7eef8}
+button:disabled{opacity:.5;cursor:wait}
+#load{flex:1}#progress{height:7px;background:#0d141d;border-radius:9px;overflow:hidden;margin-top:12px}#bar{height:100%;width:0;background:#57a9e8;transition:width .2s}
+#statusText{font-size:.8rem;color:#afbdd0;margin-top:9px;line-height:1.4}
+#chat{flex:1;display:flex;flex-direction:column;gap:12px;padding:8px 0 16px}
+.msg{max-width:92%;padding:12px 14px;border-radius:16px;line-height:1.52;white-space:pre-wrap;overflow-wrap:anywhere}
+.user{align-self:flex-end;background:#244e77}.assistant{align-self:flex-start;background:#202c3b;border:1px solid #2d3a4c}
+form{display:flex;gap:8px;position:sticky;bottom:0;padding:10px 0 max(10px,env(safe-area-inset-bottom));background:#101722}
+input{flex:1;min-width:0;font:inherit;border:1px solid #3a4a60;border-radius:13px;background:#182230;color:#f0f4f9;padding:13px}
+.hint{font-size:.76rem;color:#94a4ba;line-height:1.5;margin:8px 2px}
+#install{display:none}
+@media(min-width:650px){main{padding:22px 24px}.msg{max-width:82%}}
+</style>
+</head>
+<body><main>
+<header><div class="brand"><div class="logo">◉</div><div><h1>SMOLAI</h1><div class="sub">STANDALONE · ON-DEVICE AI</div></div></div><div class="status" id="deviceStatus">Checking device…</div></header>
+<section class="panel">
+  <div class="row"><button id="load">Download & load AI model</button><button class="secondary" id="install">Install app</button></div>
+  <div id="progress"><div id="bar"></div></div>
+  <div id="statusText">First setup needs internet to download the model (about 483 MB). After it is cached, SmolAI can work offline if your browser keeps the model files.</div>
+  <p class="hint">Model: Qwen2.5-0.5B-Instruct · 4-bit · Vietnamese + multiple languages. The model runs on this device; chats are not sent to a server.</p>
+</section>
+<section id="chat" aria-live="polite"><div class="msg assistant">Hey! I'm SmolAI. Load my tiny AI brain above, then chat. I run on this device — no laptop server required.</div></section>
+<div class="hint">Small model = lightweight, not genius-level. Answers can be wrong. Don't use it as the only source for important decisions.</div>
+<form id="form"><input id="prompt" placeholder="Message SmolAI…" autocomplete="off" required disabled><button id="send" disabled>Send</button></form>
+</main>
+<script type="module" src="./app.js"></script>
+</body></html>
