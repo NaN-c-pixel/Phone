@@ -45,11 +45,12 @@ async function loadModel() {
   $("load").disabled = true;
   status("Checking device acceleration…");
   try {
-    const useGPU = !!navigator.gpu;
-    const device = useGPU ? "webgpu" : "wasm";
-    const dtype = useGPU ? "q4f16" : "q4";
-    $("deviceStatus").textContent = useGPU ? "GPU acceleration" : "CPU mode";
-    status("Loading " + MODEL + " (" + dtype + "). The first download can take a few minutes…");
+    // Use WASM/CPU for maximum compatibility. Some WebGPU devices report support
+    // but cannot compile the model's Float16 Gather shader at generation time.
+    const device = "wasm";
+    const dtype = "q4";
+    $("deviceStatus").textContent = "CPU mode (compatibility)";
+    status("Loading " + MODEL + " (" + dtype + " on CPU). The first download can take a few minutes…");
     progress(3);
     const options = {
       progress_callback: (event) => {
@@ -57,15 +58,7 @@ async function loadModel() {
         if (event && event.status) status(event.status + (event.file ? ": " + event.file : ""));
       }
     };
-    try {
-      generator = await pipeline("text-generation", MODEL, { ...options, device, dtype });
-    } catch (gpuError) {
-      if (device !== "webgpu") throw gpuError;
-      status("GPU setup failed. Retrying with CPU mode; this may download a larger model file and run more slowly…");
-      progress(0);
-      $("deviceStatus").textContent = "CPU fallback";
-      generator = await pipeline("text-generation", MODEL, { ...options, device: "wasm", dtype: "q4" });
-    }
+    generator = await pipeline("text-generation", MODEL, { ...options, device, dtype });
     progress(100);
     status("AI ready. Model loaded on this device. You can now chat offline when its files remain cached.");
     setReady(true);
@@ -143,7 +136,7 @@ $("load").addEventListener("click", loadModel);
 $("form").addEventListener("submit", sendMessage);
 loadHistory();
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
-  navigator.serviceWorker.register("./sw.js").catch(() => {});
+  navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).then(reg => reg.update()).catch(() => {});
 }
 if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
 $("deviceStatus").textContent = navigator.gpu ? "WebGPU available" : "CPU fallback";
