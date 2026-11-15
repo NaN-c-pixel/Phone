@@ -95,11 +95,34 @@ async function sendMessage(event) {
       { role: "system", content: "You are SmolAI, a helpful, friendly and concise assistant. Reply in the language the user uses. Be honest when unsure. You are a small on-device model and should not pretend to know things you do not know." },
       ...history.slice(-8)
     ];
-    const output = await generator(messages, {
+    const runGeneration = () => generator(messages, {
       max_new_tokens: 180,
       do_sample: false,
       repetition_penalty: 1.08
     });
+    let output;
+    try {
+      output = await runGeneration();
+    } catch (gpuError) {
+      const message = gpuError?.message || String(gpuError);
+      const isF16ShaderError = /requires f16|does not support it|Gather node|shader_helper/i.test(message);
+      if (!isF16ShaderError) throw gpuError;
+
+      status("This GPU cannot run the model's Float16 shader. Switching to CPU mode…");
+      $("deviceStatus").textContent = "CPU fallback";
+      generator = null;
+      generator = await pipeline("text-generation", MODEL, {
+        device: "wasm",
+        dtype: "q4",
+        progress_callback: (event) => {
+          if (event && typeof event.progress === "number") progress(event.progress);
+          if (event && event.status) status("CPU model: " + event.status + (event.file ? ": " + event.file : ""));
+        }
+      });
+      status("CPU mode ready. Retrying your message…");
+      output = await runGeneration();
+    }
+
     const generated = output?.[0]?.generated_text;
     const last = Array.isArray(generated) ? generated[generated.length - 1] : null;
     const answer = typeof last === "string" ? last : (last?.content || "");
@@ -109,7 +132,6 @@ async function sendMessage(event) {
     saveHistory();
     addMessage("assistant", clean);
   } catch (error) {
-    history.pop();
     addMessage("assistant", "Generation error: " + (error?.message || String(error)));
   } finally {
     busy = false;
