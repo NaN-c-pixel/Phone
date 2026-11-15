@@ -1,83 +1,75 @@
-# SmolAI
+# SmolAI Lite
 
-A lightweight terminal AI assistant for Windows.
+A tiny, local-first AI assistant with a terminal and a mobile-friendly browser interface.
 
-- **Local AI:** Ollama running on your laptop.
-- **Optional cloud AI:** an OpenAI-compatible Chat Completions API.
-- **Privacy default:** starts local and never silently falls back to cloud.
+## What works today
 
-## Hardware note
+- Windows laptop: Python terminal and browser UI.
+- Android / iPhone / iPad / other devices: open the browser UI from a device on the **same Wi-Fi** as the laptop.
+- Local AI: Ollama on the laptop; the phone/tablet is just the screen and keyboard.
+- Optional cloud AI: only after explicitly selecting Cloud AI in the UI or `/cloud` in the terminal.
+- Python standard library only; no pip packages.
 
-The Dell Vostro 3558 with 4 GB RAM is a tight fit for local AI. Start with
-TinyLlama, close unnecessary apps, and expect slower responses. A compatible
-RAM upgrade can help; verify the exact memory specifications before buying.
+**Important:** this is not a standalone iOS/Android app and does not run the model inside the phone yet. The laptop hosts the model and web app. Internet-anywhere access needs a separately deployed, secured server; this first version deliberately stays on your local network.
 
-## 1. Install Python
+## 1. Install the small local model
 
-Install Python 3.10 or newer for Windows. Enable **Add Python to PATH**.
-SmolAI uses only Python's standard library; no pip packages are required.
-
-## 2. Install Ollama
-
-Install Ollama for Windows from https://ollama.com/
-
-Open Command Prompt and run:
+Install Ollama from https://ollama.com/ on the laptop, then run:
 
 ```bat
 ollama pull tinyllama
-ollama run tinyllama
 ```
 
-When the model responds, type `/bye` to exit. Ollama normally exposes its
-local API at `http://127.0.0.1:11434`.
+TinyLlama is a compact starter model (about 637 MB in the model setup used for this project). It can be weak at complex questions, but it is a practical first model for a 4 GB RAM laptop. Keep other apps closed when possible.
 
-## 3. Configure SmolAI
+## 2. Install Python
 
-Copy `.env.example` to a file named `.env` in this folder. The defaults
-select TinyLlama. You do not need a cloud key for local mode.
+Install Python 3.10+ and enable **Add Python to PATH**. No extra Python packages are needed.
 
-## 4. Start SmolAI
+## 3. Start the browser version
 
-Double-click `run_smolai.bat`, or run:
+Double-click `start_web.bat`. Keep the black terminal window open.
+
+It prints:
+- A laptop URL, usually `http://127.0.0.1:8765`
+- A Wi-Fi URL, such as `http://192.168.x.x:8765`
+- A private access token
+
+Open the laptop URL on the laptop, or the Wi-Fi URL on a phone/tablet connected to the same Wi-Fi. Paste the access token into the page and press Connect.
+
+If Windows Firewall asks, allow Python on **Private networks only**. Do not expose this server to the public internet or configure router port forwarding.
+
+## 4. Terminal version
+
+Double-click `run_smolai.bat` or run:
 
 ```bat
 py -3 smolai.py
 ```
 
-Try asking: `Hi SmolAI, introduce yourself.`
+Commands: `/local`, `/cloud`, `/clear`, `/help`, `/exit`.
 
-## Commands
+## Privacy
 
-| Command | Action |
-|---|---|
-| `/local` | Use local Ollama |
-| `/cloud` | Use configured cloud API |
-| `/clear` | Clear chat history |
-| `/help` | Show commands |
-| `/exit` | Quit |
-
-## Hybrid mode and privacy
-
-SmolAI starts in local mode. It does not automatically upload prompts when
-Ollama is unavailable. You must explicitly type `/cloud` to use the cloud
-provider. Cloud requests send conversation context to that provider.
-
-Cloud API access is separate from a ChatGPT subscription and may incur
-charges. Have the account owner choose the provider, review its privacy
-terms and pricing, and approve any API account or payment setup. Never
-commit `.env` or publish an API key.
+- Local is the default.
+- In local mode, prompts go from the browser to the laptop, then to its local Ollama service.
+- SmolAI does not silently switch to cloud when local AI fails.
+- Cloud mode sends chat messages to the provider configured in the laptop's `.env` file. Cloud API use may cost money and is separate from a ChatGPT subscription.
+- The browser session uses a random access token printed in the laptop terminal. Keep it private.
+- Do not commit `.env` or publish API keys.
 
 ## Troubleshooting
 
-- **Connection refused:** make sure Ollama is running.
 - **Model not found:** run `ollama pull tinyllama`.
-- **Slow / out of memory:** close browsers and other apps; stay with TinyLlama.
-- **Python not found:** reinstall Python and enable PATH, or try `py -3`.
+- **Laptop works, phone cannot connect:** check both are on the same Wi-Fi; allow Python on Windows Private networks; check the printed Wi-Fi IP.
+- **Connection refused:** ensure Ollama is running and the laptop server terminal remains open.
+- **Slow responses:** close browser tabs and other apps; 4 GB RAM is limited.
+- **Port already in use:** set `SMOLAI_PORT` to another port before starting.
 
 ## Roadmap
 
-1. Terminal chat MVP.
-2. Model picker and local conversation history.
-3. Optional voice input and speech output.
-4. Local document search.
-5. Permission-based desktop automation.
+1. Stable local web + terminal MVP.
+2. Better tiny model selector.
+3. Installable mobile PWA.
+4. Optional direct on-device inference on supported Android / desktop devices.
+5. Secure remote hosting for access outside the home Wi-Fi.
