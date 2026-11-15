@@ -51,14 +51,21 @@ async function loadModel() {
     $("deviceStatus").textContent = useGPU ? "GPU acceleration" : "CPU mode";
     status("Loading " + MODEL + " (" + dtype + "). The first download can take a few minutes…");
     progress(3);
-    generator = await pipeline("text-generation", MODEL, {
-      device,
-      dtype,
+    const options = {
       progress_callback: (event) => {
         if (event && typeof event.progress === "number") progress(event.progress);
         if (event && event.status) status(event.status + (event.file ? ": " + event.file : ""));
       }
-    });
+    };
+    try {
+      generator = await pipeline("text-generation", MODEL, { ...options, device, dtype });
+    } catch (gpuError) {
+      if (device !== "webgpu") throw gpuError;
+      status("GPU setup failed. Retrying with CPU mode; this may download a larger model file and run more slowly…");
+      progress(0);
+      $("deviceStatus").textContent = "CPU fallback";
+      generator = await pipeline("text-generation", MODEL, { ...options, device: "wasm", dtype: "q4" });
+    }
     progress(100);
     status("AI ready. Model loaded on this device. You can now chat offline when its files remain cached.");
     setReady(true);
