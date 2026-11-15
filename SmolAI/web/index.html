@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#10131a">
+<title>SmolAI</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#10131a;color:#edf1f7}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;justify-content:center}
+main{width:min(820px,100%);min-height:100vh;display:flex;flex-direction:column;padding:18px 14px env(safe-area-inset-bottom)}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid #293140;padding:8px 2px 16px}
+h1{font-size:1.25rem;margin:0;letter-spacing:.04em}.sub{color:#9ba8ba;font-size:.8rem;margin-top:3px}
+select,input,button{font:inherit;border:1px solid #354154;border-radius:12px;background:#1b2330;color:#edf1f7;padding:11px}
+select{max-width:132px}.notice{font-size:.8rem;color:#b7c4d5;background:#18202b;border:1px solid #293748;border-radius:12px;padding:10px 12px;margin:14px 0}
+#chat{flex:1;display:flex;flex-direction:column;gap:12px;padding:8px 0 18px}
+.msg{max-width:92%;padding:12px 14px;border-radius:16px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+.user{align-self:flex-end;background:#254d77}.bot{align-self:flex-start;background:#202a38}
+.label{font-size:.7rem;color:#aebbd0;margin-bottom:4px}
+form{display:flex;gap:8px;padding:10px 0 max(10px,env(safe-area-inset-bottom));position:sticky;bottom:0;background:#10131a}
+#prompt{flex:1;min-width:0}button{background:#3979bd;border-color:#3979bd;font-weight:650;cursor:pointer}
+button:disabled{opacity:.55}#tokenPanel{display:flex;gap:8px;margin-bottom:12px}#token{flex:1;min-width:0}
+.small{font-size:.75rem;color:#98a7bb;margin:8px 2px}
+@media(min-width:600px){main{padding:24px 22px} .msg{max-width:80%}}
+</style>
+</head>
+<body><main>
+<header><div><h1>◉ SMOLAI</h1><div class="sub">Tiny assistant · local-first</div></div>
+<select id="mode" aria-label="AI mode"><option value="local">Local AI</option><option value="cloud">Cloud AI</option></select></header>
+<div class="notice" id="privacy">🔒 Local mode: messages go to Ollama on the laptop running SmolAI. Nothing is uploaded to a cloud AI.</div>
+<div id="tokenPanel"><input id="token" type="password" autocomplete="off" placeholder="Paste laptop access token" aria-label="Access token"><button id="saveToken" type="button">Connect</button></div>
+<section id="chat" aria-live="polite"><div class="msg bot">Hi! I'm SmolAI. Connect with the token shown in your laptop terminal, then ask me something.</div></section>
+<div class="small">Tip: keep the laptop and phone on the same Wi-Fi. Cloud mode is optional and sends chat text to your configured provider.</div>
+<form id="form"><input id="prompt" placeholder="Message SmolAI…" autocomplete="off" required><button id="send">Send</button></form>
+</main>
+<script>
+const $=id=>document.getElementById(id), history=[];
+function add(role,text){const d=document.createElement('div');d.className='msg '+(role==='user'?'user':'bot');d.textContent=text;$('chat').appendChild(d);d.scrollIntoView({behavior:'smooth',block:'end'});}
+function token(){return $('token').value.trim();}
+$('saveToken').onclick=()=>{if(token()){$('tokenPanel').style.display='none';add('assistant','Connected to the SmolAI laptop server.');}};
+$('mode').onchange=()=>{$('privacy').textContent=$('mode').value==='local'?'🔒 Local mode: messages go to Ollama on the laptop.':'☁️ Cloud mode: messages are sent to the cloud provider configured on the laptop.';};
+$('form').onsubmit=async e=>{e.preventDefault();const text=$('prompt').value.trim();if(!text)return;if(!token()){$('tokenPanel').style.display='flex';add('assistant','Paste the access token from the laptop terminal first.');return;}
+$('prompt').value='';add('user',text);history.push({role:'user',content:text});$('send').disabled=true;$('send').textContent='…';
+try{const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json','X-SmolAI-Token':token()},body:JSON.stringify({mode:$('mode').value,messages:[{role:'system',content:'You are SmolAI, a helpful and concise assistant. Be honest about uncertainty.'},...history.slice(-8)]})});const data=await r.json();if(!r.ok)throw new Error(data.error||'Request failed');const answer=data.answer||'(empty response)';add('assistant',answer);history.push({role:'assistant',content:answer});}catch(err){add('assistant','Error: '+err.message);history.pop();}finally{$('send').disabled=false;$('send').textContent='Send';$('prompt').focus();}};
+</script></body></html>
