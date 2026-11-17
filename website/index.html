@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b1020">
+  <meta name="description" content="HùngOS Pocket Edition — a pocket computer powered by ESP32-S3.">
+  <title>HùngOS — Pocket Edition</title>
+  <style>
+    :root{color-scheme:dark;--bg:#0b1020;--panel:#121a2e;--muted:#9aa8c3;--text:#f4f7ff;--line:#263451;--accent:#8b9cff;--mint:#75e0c0}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 80% 0%,#24315c 0,transparent 38%),var(--bg);color:var(--text);font:16px/1.6 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+    a{color:inherit}.wrap{width:min(1080px,calc(100% - 40px));margin:auto}
+    header{display:flex;align-items:center;justify-content:space-between;padding:22px 0;border-bottom:1px solid var(--line)}
+    .brand{font-weight:800;letter-spacing:.3px}.brand span{color:var(--mint)}nav{display:flex;gap:22px;color:var(--muted);font-size:14px}nav a{text-decoration:none}
+    .hero{padding:88px 0 72px;display:grid;grid-template-columns:1.3fr .7fr;gap:44px;align-items:center}
+    .eyebrow{color:var(--mint);font-size:13px;font-weight:800;letter-spacing:2px;text-transform:uppercase}
+    h1{font-size:clamp(42px,7vw,76px);line-height:1.02;letter-spacing:-3px;margin:16px 0}
+    .lead{font-size:18px;color:var(--muted);max-width:620px}
+    .actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px}
+    .btn{display:inline-block;text-decoration:none;padding:12px 18px;border-radius:12px;font-weight:750;background:var(--accent);color:#10152a}
+    .btn.secondary{background:transparent;color:var(--text);border:1px solid var(--line)}
+    .device{border:1px solid #405078;border-radius:30px;padding:14px;background:linear-gradient(145deg,#202b48,#0e1426);box-shadow:0 24px 80px #0008;max-width:290px;margin:auto;transform:rotate(3deg)}
+    .screen{border-radius:20px;background:linear-gradient(160deg,#1c2b52,#111a32);padding:22px 16px;min-height:360px;border:1px solid #405078}
+    .status{font-size:11px;color:#b8c5e5;display:flex;justify-content:space-between}
+    .screen h2{font-size:23px;margin:28px 0 5px}.screen p{font-size:12px;color:#b8c5e5;margin:0 0 20px}
+    .appgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    .app{background:#ffffff12;border:1px solid #ffffff16;border-radius:13px;padding:12px 5px;text-align:center;font-size:11px}
+    .app b{display:block;font-size:22px;margin-bottom:5px}
+    section{padding:54px 0}.section-title{font-size:30px;letter-spacing:-1px;margin:0 0 10px}.sub{color:var(--muted);margin:0 0 26px}
+    .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:22px}
+    .card .ico{font-size:25px}.card h3{margin:12px 0 6px}.card p{color:var(--muted);margin:0;font-size:14px}
+    .how{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;counter-reset:step}
+    .step{background:#10182a;border:1px solid var(--line);border-radius:16px;padding:20px}
+    .step:before{counter-increment:step;content:"0" counter(step);color:var(--mint);font-weight:900;font-size:13px}
+    .step h3{margin:10px 0 4px}.step p{color:var(--muted);font-size:14px;margin:0}
+    .note{padding:18px 20px;border:1px solid #476b70;background:#102522;border-radius:14px;color:#c7f6e9}
+    footer{border-top:1px solid var(--line);padding:28px 0;color:var(--muted);font-size:13px;display:flex;justify-content:space-between;gap:15px;flex-wrap:wrap}
+    @media(max-width:760px){nav{gap:12px}.hero{grid-template-columns:1fr;padding:60px 0 45px}.device{max-width:250px}.cards,.how{grid-template-columns:1fr 1fr}}
+    @media(max-width:500px){nav a:nth-child(2){display:none}.cards,.how{grid-template-columns:1fr}h1{letter-spacing:-2px}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">Hùng<span>OS</span></div>
+      <nav><a href="#features">Features</a><a href="#connect">Connect</a><a href="https://github.com/NaN-c-pixel/Phone">Source code ↗</a></nav>
+    </header>
+    <main>
+      <section class="hero">
+        <div>
+          <div class="eyebrow">ESP32-S3 · Pocket Edition</div>
+          <h1>A tiny computer.<br><span style="color:var(--accent)">Big ideas.</span></h1>
+          <p class="lead">HùngOS turns an ESP32-S3 into a pocket computer with a browser-based interface, everyday tools, and a growing collection of mini-apps.</p>
+          <div class="actions">
+            <a class="btn" href="#connect">How to connect</a>
+            <a class="btn secondary" href="https://github.com/NaN-c-pixel/Phone">Explore the project ↗</a>
+          </div>
+        </div>
+        <div class="device" aria-label="Illustration of a pocket computer screen">
+          <div class="screen">
+            <div class="status"><span>HùngOS</span><span>Wi-Fi · 100%</span></div>
+            <h2>Good day 👋</h2><p>Your pocket workspace is ready.</p>
+            <div class="appgrid">
+              <div class="app"><b>📝</b>Notes</div><div class="app"><b>📁</b>Files</div><div class="app"><b>⏱️</b>Timer</div>
+              <div class="app"><b>📊</b>Monitor</div><div class="app"><b>🌦️</b>Weather</div><div class="app"><b>🧮</b>Calculator</div>
+              <div class="app"><b>🐍</b>Snake</div><div class="app"><b>⚙️</b>Settings</div><div class="app"><b>🤖</b>Assistant</div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section id="features">
+        <h2 class="section-title">Useful things, right on the board.</h2>
+        <p class="sub">A lightweight collection of tools served over your local Wi-Fi network.</p>
+        <div class="cards">
+          <article class="card"><div class="ico">🗒️</div><h3>Everyday tools</h3><p>Notes, tasks, timer, calculator, contacts, calendar, and unit conversion.</p></article>
+          <article class="card"><div class="ico">🛠️</div><h3>Device controls</h3><p>Monitor memory and Wi-Fi, inspect files, and work with supported GPIO pins.</p></article>
+          <article class="card"><div class="ico">🌐</div><h3>Connected utilities</h3><p>Weather, definitions, quick lookups, and web shortcuts when internet is available.</p></article>
+        </div>
+      </section>
+      <section id="connect">
+        <h2 class="section-title">Connect to your HùngOS</h2>
+        <p class="sub">The control interface is served by your ESP32-S3 — this page is the project’s public info page.</p>
+        <div class="how">
+          <article class="step"><h3>Power on</h3><p>Start the ESP32-S3 and let it connect to your configured 2.4 GHz Wi-Fi network.</p></article>
+          <article class="step"><h3>Find its address</h3><p>Read the local IP address printed in the MicroPython serial/REPL output.</p></article>
+          <article class="step"><h3>Open the interface</h3><p>On a device connected to the same network, open <strong>http://</strong> followed by the board’s local IP address.</p></article>
+        </div>
+        <p class="note" style="margin-top:18px">🔒 The board interface is intended for your local network. This public page does not connect to or expose your ESP32.</p>
+      </section>
+    </main>
+    <footer><span>HùngOS Pocket Edition · Built around ESP32-S3</span><a href="https://github.com/NaN-c-pixel/Phone">GitHub source ↗</a></footer>
+  </div>
+</body>
+</html>
